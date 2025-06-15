@@ -1,0 +1,11 @@
+streamlit
+duckduckgo-search
+feedparser
+requests
+beautifulsoup4
+wikipedia-api
+pytrends
+pandas
+groq
+langchain-community
+ollama
