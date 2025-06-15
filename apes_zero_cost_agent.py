@@ -22,29 +22,26 @@ import pandas as pd
 
 # Free LLM options
 try:
-    from groq import Groq  # Option 1: Groq (free tier)
+    from groq import Groq
 except:
     pass
 
 try:
-    from langchain_community.llms import Ollama  # Option 2: Local LLM
+    from langchain_community.llms import Ollama
 except:
     pass
 
-# Set page configuration
 st.set_page_config(
     page_title="APES Football Intelligence - Zero Cost",
     page_icon="⚽",
     layout="wide"
 )
 
-# Initialize session state
 if "llm_provider" not in st.session_state:
     st.session_state.llm_provider = "groq"
 if "groq_api_key" not in st.session_state:
     st.session_state.groq_api_key = ""
 
-# Sidebar configuration
 with st.sidebar:
     st.title("🎯 APES Configuration")
     st.markdown("### Zero Cost Intelligence")
@@ -69,7 +66,6 @@ with st.sidebar:
         st.info("Make sure Ollama is running locally with a model installed")
         st.code("ollama run llama3", language="bash")
         st.session_state.llm_provider = "ollama"
-
     else:
         st.session_state.llm_provider = "mock"
 
@@ -90,7 +86,6 @@ class APESFreeTools:
     def __init__(self):
         self.ddgs = DDGS()
         self.pytrends = TrendReq(hl='en-US', tz=360)
-        self.headers = {'User-Agent': 'Mozilla/5.0'}
 
     def search_web(self, query: str, max_results: int = 10) -> List[Dict]:
         try:
@@ -239,34 +234,46 @@ Topic: {topic}
 """
 
 async def deep_research_free(topic: str, tools: APESFreeTools, llm: APESFreeLLM) -> Dict[str, Any]:
-    research_data = {'topic': topic, 'timestamp': datetime.now().isoformat()}
+    data = {'topic': topic, 'timestamp': datetime.now().isoformat()}
     progress = st.progress(0)
     status = st.empty()
 
     status.text("🔍 Searching the web...")
-    research_data['search_results'] = tools.search_web(f"{topic} transfer news 2025")
+    data['search_results'] = tools.search_web(f"{topic} transfer news 2025")
     progress.progress(25)
 
     status.text("📰 Gathering news feeds...")
-    research_data['news_feeds'] = tools.get_news_feeds(topic)
+    data['news_feeds'] = tools.get_news_feeds(topic)
     progress.progress(50)
 
     status.text("📚 Checking Wikipedia...")
-    research_data['wikipedia'] = tools.check_wikipedia(topic)
+    data['wikipedia'] = tools.check_wikipedia(topic)
     progress.progress(75)
 
     status.text("📈 Analyzing trends...")
-    research_data['trends'] = tools.analyze_trends(topic.split()[:3])
+    data['trends'] = tools.analyze_trends(topic.split()[:3])
     progress.progress(90)
 
     status.text("🧠 Generating report...")
-    research_data['analysis'] = llm.analyze(research_data, topic)
+    data['analysis'] = llm.analyze(data, topic)
     progress.progress(100)
 
     time.sleep(1)
     progress.empty()
     status.empty()
-    return research_data
+    return data
+
+def make_serializable(obj):
+    try:
+        json.dumps(obj)
+        return obj
+    except TypeError:
+        if isinstance(obj, dict):
+            return {k: make_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [make_serializable(i) for i in obj]
+        else:
+            return str(obj)
 
 st.title("⚽ APES Football Intelligence - Zero Cost Edition")
 st.markdown("*Advanced Pattern Extraction System – No expensive APIs required!*")
@@ -316,12 +323,13 @@ if st.button("🚀 Start Intelligence Gathering", type="primary"):
         with tabs[3]:
             st.json(data['trends'])
 
+        serializable_data = make_serializable(data)
         st.download_button(
             "📅 Download Full Report",
-            json.dumps(data, indent=2),
+            json.dumps(serializable_data, indent=2),
             file_name=f"apes_report_{research_topic.replace(' ', '_')}.json",
             mime="application/json"
         )
 
 st.markdown("---")
-st.markdown("APES Zero Cost - Built with Open Tools ")
+st.markdown("APES Zero Cost - Built with Open Tools")
