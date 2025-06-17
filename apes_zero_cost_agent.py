@@ -469,23 +469,27 @@ class FergusonTools:
         valid_players.sort(key=lambda x: x['source_relevance'], reverse=True)
         return valid_players[:10]  # Top 10 discoveries
     
-    def _extract_player_names_from_discovery(self, article: Dict) -> List[Dict]:
-        """Extract player names and info from discovery articles"""
+    def _extract_players_from_targeted_sources(self, article: Dict) -> List[Dict]:
+        """Extract player names from targeted scouting sources with better patterns"""
         if not article or not isinstance(article, dict):
             return []
             
         text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
         
-        # Enhanced patterns for extracting player info - more permissive
+        # More specific patterns for scouting content
         patterns = [
-            r'(\w+ \w+),?\s*(?:aged?\s*)?(\d{1,2})?[^.]*(?:midfielder|forward|striker|defender|goalkeeper|winger|player)',
-            r'(\w+ \w+)[^.]*(?:academy|youth|prospect|talent|wonderkid|signing|signed)',
-            r'(?:player|talent|prospect)\s+(\w+ \w+)',
-            r'(\w+ \w+)[^.]*(?:breakthrough|debut|first team|transfer)',
-            r'(\w+ \w+)[^.]*(?:born|age|years old)',
-            r'(\w+\s+\w+)(?:\s+is|\s+has|\s+was)',  # "John Smith is/has/was"
-            r'signed\s+(\w+ \w+)',
-            r'(\w+ \w+)\s+(?:from|to|at)',  # "John Smith from/to/at"
+            # Transfermarkt/UEFA style
+            r'(\w+ \w+)\s*\((\d{1,2})\)[^.]*(?:€[\d.]+[MK]|market value|valuation)',
+            # Award/list style  
+            r'(\d+)\.\s+(\w+ \w+)[^.]*(?:years old|age \d+|\(\d{4}\))',
+            # Scouting report style
+            r'(\w+ \w+)[^.]*(?:rated|prospect|potential|breakthrough|debut)',
+            # News style with age
+            r'(\w+ \w+),?\s*(?:aged?\s*)?(\d{1,2})[^.]*(?:signed|transfer|move)',
+            # Player profile style
+            r'Profile:\s*(\w+ \w+)',
+            # List/ranking style
+            r'(\w+ \w+)\s*-\s*(?:midfielder|forward|striker|defender|goalkeeper)',
         ]
         
         found_players = []
@@ -493,35 +497,76 @@ class FergusonTools:
             for pattern in patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
                 for match in matches:
-                    if isinstance(match, tuple):
-                        name = str(match[0]) if match[0] else ""
-                        age_or_year = str(match[1]) if len(match) > 1 and match[1] else ""
+                    if isinstance(match, tuple) and len(match) >= 2:
+                        name = str(match[1] if match[0].isdigit() else match[0])
+                        age_info = str(match[0] if match[0].isdigit() else (match[1] if len(match) > 1 else ""))
                     else:
                         name = str(match)
-                        age_or_year = ""
+                        age_info = ""
                     
-                    # More lenient filtering for player names
+                    # Enhanced filtering for quality
                     if (len(name.split()) == 2 and 
-                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from', 'new', 'old', 'first', 'last', 'this', 'that']) and
+                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from', 'new', 'old', 'first', 'last', 'this', 'that', 'their', 'more', 'most', 'best']) and
                         len(name) > 4 and
-                        name[0].isupper()):  # Must start with capital letter
+                        name[0].isupper() and
+                        not name.lower() in ['uefa com', 'fifa com', 'premier league', 'la liga']):
                         
                         player_info = {
                             'name': name.title(),
-                            'age_info': age_or_year,
+                            'age_info': age_info,
                             'source_title': str(article.get('title', '')),
                             'source_link': str(article.get('link', '')),
                             'context': self._extract_context(text, name)
                         }
                         
-                        # Only add if we have valid data
-                        if player_info['name'] and len(player_info['name']) > 2:
+                        if player_info['name'] not in [p['name'] for p in found_players]:
                             found_players.append(player_info)
-        except Exception as e:
-            # If regex fails, return empty list
+        except Exception:
             return []
         
-        return found_players[:3]  # Top 3 from each article
+        return found_players[:5]  # Top 5 from each source
+    
+    def _calculate_targeted_relevance(self, article: Dict, query: str, age_range: str, position: str) -> float:
+        """Calculate relevance for targeted source-based discovery"""
+        try:
+            if not article or not isinstance(article, dict):
+                return 0.0
+                
+            text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
+            text = text.lower()
+            
+            score = 0.0
+            
+            # High value for quality sources
+            quality_sources = ['transfermarkt', 'uefa', 'fifa', 'espn', 'goal', 'sky sports', 'bbc sport']
+            if any(source in text for source in quality_sources):
+                score += 8.0
+            
+            # High value for structured content (lists, rankings, awards)
+            if any(indicator in text for indicator in ['top 10', 'ranking', 'list', 'award', 'nominee', 'winner']):
+                score += 6.0
+            
+            # Scouting-specific content
+            scouting_terms = ['scouting report', 'player profile', 'market value', 'breakthrough', 'prospect']
+            score += sum(4.0 for term in scouting_terms if term in text)
+            
+            # Age relevance
+            if '16' in text or '17' in text or '18' in text or '19' in text or '20' in text:
+                score += 3.0
+            
+            # Position relevance
+            if position != "Any Position":
+                position_terms = position.lower().split()
+                score += sum(3.0 for term in position_terms if term in text)
+            
+            # Transfer/market context
+            market_terms = ['transfer', 'signing', 'market value', 'fee', 'contract']
+            score += sum(2.0 for term in market_terms if term in text)
+            
+            return float(score)
+            
+        except Exception:
+            return 0.0
     
     def _extract_context(self, text: str, player_name: str) -> str:
         """Extract relevant context around player name"""
