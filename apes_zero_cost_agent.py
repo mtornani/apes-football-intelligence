@@ -368,23 +368,38 @@ class FergusonTools:
                     # Extract potential player names from results
                     potential_players = self._extract_player_names_from_discovery(result)
                     for player_info in potential_players:
-                        if player_info and player_info not in discovered_players:
-                            discovered_players.append({
-                                **player_info,
-                                'discovery_query': query,
-                                'source_relevance': self._calculate_discovery_relevance(result, age_range, position)
-                            })
+                        if player_info and isinstance(player_info, dict) and player_info.get('name'):
+                            # Check for duplicates by name
+                            existing_names = [p.get('name', '') for p in discovered_players if isinstance(p, dict)]
+                            if player_info['name'] not in existing_names:
+                                player_entry = {
+                                    **player_info,
+                                    'discovery_query': query,
+                                    'source_relevance': self._calculate_discovery_relevance(result, age_range, position)
+                                }
+                                discovered_players.append(player_entry)
             except Exception as e:
                 continue
         
-        # Filter out None values and sort by relevance
-        discovered_players = [p for p in discovered_players if p is not None and p.get('source_relevance', 0) > 0]
-        discovered_players.sort(key=lambda x: x.get('source_relevance', 0), reverse=True)
-        return discovered_players[:10]  # Top 10 discoveries
+        # Filter out invalid entries and sort by relevance
+        valid_players = []
+        for p in discovered_players:
+            if (isinstance(p, dict) and 
+                p.get('name') and 
+                isinstance(p.get('source_relevance'), (int, float)) and 
+                p.get('source_relevance', 0) > 0):
+                valid_players.append(p)
+        
+        # Sort by relevance
+        valid_players.sort(key=lambda x: x['source_relevance'], reverse=True)
+        return valid_players[:10]  # Top 10 discoveries
     
     def _extract_player_names_from_discovery(self, article: Dict) -> List[Dict]:
         """Extract player names and info from discovery articles"""
-        text = article.get('body', '') + ' ' + article.get('title', '')
+        if not article or not isinstance(article, dict):
+            return []
+            
+        text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
         
         # Enhanced patterns for extracting player info
         patterns = [
@@ -396,40 +411,58 @@ class FergusonTools:
         ]
         
         found_players = []
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    name = match[0] if match[0] else ""
-                    age_or_year = match[1] if len(match) > 1 and match[1] else ""
-                else:
-                    name = match
-                    age_or_year = ""
-                
-                # Filter out common false positives
-                if (len(name.split()) == 2 and 
-                    not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from']) and
-                    len(name) > 5):
+        try:
+            for pattern in patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        name = str(match[0]) if match[0] else ""
+                        age_or_year = str(match[1]) if len(match) > 1 and match[1] else ""
+                    else:
+                        name = str(match)
+                        age_or_year = ""
                     
-                    found_players.append({
-                        'name': name.title(),
-                        'age_info': age_or_year,
-                        'source_title': article.get('title', ''),
-                        'source_link': article.get('link', ''),
-                        'context': self._extract_context(text, name)
-                    })
+                    # Filter out common false positives
+                    if (len(name.split()) == 2 and 
+                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from']) and
+                        len(name) > 5):
+                        
+                        player_info = {
+                            'name': name.title(),
+                            'age_info': age_or_year,
+                            'source_title': str(article.get('title', '')),
+                            'source_link': str(article.get('link', '')),
+                            'context': self._extract_context(text, name)
+                        }
+                        
+                        # Only add if we have valid data
+                        if player_info['name'] and len(player_info['name']) > 2:
+                            found_players.append(player_info)
+        except Exception as e:
+            # If regex fails, return empty list
+            return []
         
         return found_players[:3]  # Top 3 from each article
     
     def _extract_context(self, text: str, player_name: str) -> str:
         """Extract relevant context around player name"""
-        # Find sentences containing the player name
-        sentences = re.split(r'[.!?]', text)
-        relevant_sentences = [s.strip() for s in sentences if player_name.lower() in s.lower()]
-        
-        if relevant_sentences:
-            return relevant_sentences[0][:150] + "..."
-        return ""
+        try:
+            # Convert inputs to strings and handle None values
+            text = str(text) if text is not None else ""
+            player_name = str(player_name) if player_name is not None else ""
+            
+            if not text or not player_name:
+                return ""
+            
+            # Find sentences containing the player name
+            sentences = re.split(r'[.!?]', text)
+            relevant_sentences = [s.strip() for s in sentences if player_name.lower() in s.lower()]
+            
+            if relevant_sentences:
+                return relevant_sentences[0][:150] + "..."
+            return ""
+        except Exception:
+            return ""
     
     def _calculate_discovery_relevance(self, article: Dict, age_range: str, position: str) -> float:
         """Calculate how relevant an article is for talent discovery"""
@@ -1608,7 +1641,11 @@ def main_navigation():
     nav_tabs = st.tabs(["🧠 Character Analysis", "⚖️ Compare Players", "ℹ️ About"])
     
     with nav_tabs[0]:
-        main()  # Main analysis tool
+        try:
+            main("tab1")  # Main analysis tool
+        except Exception as e:
+            st.error(f"Error in main analysis: {str(e)}")
+            st.info("Please try refreshing the page or contact support if the problem persists.")
     
     with nav_tabs[1]:
         show_comparison_tool()
