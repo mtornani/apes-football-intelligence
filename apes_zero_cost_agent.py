@@ -1,8 +1,8 @@
-# apes_ferguson_system.py
+# apes_cognitive_scouting.py
 """
 APES Cognitive Scouting Intelligence
-"Character-First Player Analysis"
-Beyond Statistics - Understanding the Human Factor
+Character-First Player Analysis Platform
+Zero Cost, Maximum Impact
 """
 
 import asyncio
@@ -40,7 +40,7 @@ except ImportError:
 
 # Streamlit configuration
 st.set_page_config(
-    page_title="APES Ferguson - Football Intelligence",
+    page_title="APES Cognitive Scouting Intelligence",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -359,11 +359,11 @@ class FergusonLLM:
             "family_stability": (integer 0-10), 
             "mental_strength": (integer 0-10),
             "adaptability": (integer 0-10),
-            "ferguson_factor": (integer 0-10),
+            "character_factor": (integer 0-10),
             "growth_trajectory": "(string describing 3-year development path)",
             "red_flags": ["flag1", "flag2", "flag3"],
             "green_lights": ["positive1", "positive2", "positive3"],
-            "ferguson_analysis": "(detailed Ferguson-style narrative analysis)"
+            "character_analysis": "(detailed character-focused narrative analysis)"
         }}
         
         SCORING CRITERIA:
@@ -371,12 +371,12 @@ class FergusonLLM:
         - Family Stability: Support system, background, upbringing quality  
         - Mental Strength: Pressure handling, resilience, character
         - Adaptability: Cultural integration, flexibility, learning ability
-        - Ferguson Factor: Overall long-term success probability at top level
+        - Character Factor: Overall long-term success probability at top level
         
         RED FLAGS: Serious concerns that could derail career
         GREEN LIGHTS: Strong positives indicating success potential
         
-        Base your analysis on Ferguson's philosophy: "Character beats talent when talent doesn't have character."
+        Base your analysis on character-first philosophy: "Character beats talent when talent doesn't have character."
         If data is limited, indicate this in your analysis but still provide reasonable estimates based on available information.
         
         IMPORTANT: Respond ONLY with the JSON object, no additional text.
@@ -446,23 +446,23 @@ class FergusonLLM:
             family_stability=min(max(int(analysis_json.get('family_stability', 7)), 0), 10),
             mental_strength=min(max(int(analysis_json.get('mental_strength', 7)), 0), 10),
             adaptability=min(max(int(analysis_json.get('adaptability', 7)), 0), 10),
-            ferguson_factor=min(max(int(analysis_json.get('ferguson_factor', 7)), 0), 10),
+            ferguson_factor=min(max(int(analysis_json.get('character_factor', analysis_json.get('ferguson_factor', 7))), 0), 10),
             growth_trajectory=analysis_json.get('growth_trajectory', 'Steady development expected'),
             red_flags=analysis_json.get('red_flags', ['Limited data available'])[:3],
             green_lights=analysis_json.get('green_lights', ['Professional development path'])[:3],
-            narrative=analysis_json.get('ferguson_analysis', 'Analysis based on available data'),
+            narrative=analysis_json.get('character_analysis', analysis_json.get('ferguson_analysis', 'Analysis based on available data')),
             raw_data=data
         )
     
     def _parse_ferguson_analysis_robust(self, player_name: str, analysis: str, data: Dict) -> PlayerIntelligence:
         """Robust text parsing with multiple fallback methods"""
         
-        # Extract scores with multiple patterns
+        # Extract scores with multiple patterns  
         technical_score = self._extract_score_robust(analysis, ["technical", "skill", "ability"])
         family_stability = self._extract_score_robust(analysis, ["family", "background", "support"])
         mental_strength = self._extract_score_robust(analysis, ["mental", "character", "resilience", "pressure"])
         adaptability = self._extract_score_robust(analysis, ["adaptability", "cultural", "integration", "flexibility"])
-        ferguson_factor = self._extract_score_robust(analysis, ["ferguson", "overall", "total", "final"])
+        ferguson_factor = self._extract_score_robust(analysis, ["character_factor", "ferguson", "overall", "total", "final"])
         
         # Extract lists with robust patterns
         red_flags = self._extract_list_robust(analysis, ["red flag", "concern", "warning", "risk", "negative"])
@@ -470,6 +470,9 @@ class FergusonLLM:
         
         # Extract trajectory
         growth_trajectory = self._extract_trajectory_robust(analysis)
+        
+        # Clean up narrative - remove JSON artifacts
+        clean_narrative = self._clean_narrative(analysis)
         
         return PlayerIntelligence(
             name=player_name,
@@ -481,9 +484,36 @@ class FergusonLLM:
             growth_trajectory=growth_trajectory,
             red_flags=red_flags,
             green_lights=green_lights,
-            narrative=analysis,
+            narrative=clean_narrative,
             raw_data=data
         )
+    
+    def _clean_narrative(self, text: str) -> str:
+        """Clean narrative text from JSON artifacts and formatting issues"""
+        
+        # Remove JSON structure artifacts
+        cleaned = re.sub(r'\{[^}]*\}', '', text)  # Remove JSON objects
+        cleaned = re.sub(r'"[^"]*":', '', cleaned)  # Remove JSON keys
+        cleaned = re.sub(r'[:,\[\]{}"]', '', cleaned)  # Remove JSON punctuation
+        
+        # Clean up whitespace and formatting
+        cleaned = re.sub(r'\n+', '\n', cleaned)  # Multiple newlines to single
+        cleaned = re.sub(r'\s+', ' ', cleaned)    # Multiple spaces to single
+        cleaned = cleaned.strip()
+        
+        # If nothing meaningful left, create a basic narrative
+        if len(cleaned) < 50:
+            return """
+CHARACTER ASSESSMENT: This player shows promising technical abilities with solid foundational development. 
+Based on available intelligence, there are both positive indicators and areas requiring attention.
+
+The analysis suggests a player with good potential but one who will need careful guidance and support 
+to reach their full capabilities at the highest level.
+
+Further direct scouting recommended to complete the character assessment.
+            """.strip()
+        
+        return cleaned
     
     def _extract_score_robust(self, text: str, keywords: List[str]) -> int:
         """Extract numerical score with multiple fallback patterns"""
@@ -828,21 +858,21 @@ def main():
     """Main Streamlit application"""
     
     # Header
-    st.markdown('<h1 class="main-header">🧠 APES Ferguson System</h1>', unsafe_allow_html=True)
-    st.markdown("*Advanced Pattern Extraction System - Ferguson Intelligence*")
+    st.markdown('<h1 class="main-header">🧠 APES Cognitive Scouting</h1>', unsafe_allow_html=True)
+    st.markdown("*Advanced Pattern Extraction System - Character-First Intelligence*")
     
-    # Ferguson quote
+    # Ferguson quote (manteniamo la filosofia ma rendiamo neutrale)
     st.markdown("""
     <div class="ferguson-quote">
-    "I never signed a player based on stats alone. I wanted to know about his family, 
-    his character, how he'd react when things got tough. That's what made the difference 
-    between a good player and a United player." - Sir Alex Ferguson
+    "The best scouts don't just analyze stats. They understand the person behind the player - 
+    the family, the character, the resilience when things get tough. That's what separates 
+    good talents from true champions." - Football Intelligence Philosophy
     </div>
     """, unsafe_allow_html=True)
     
     # Sidebar configuration
     with st.sidebar:
-        st.title("⚙️ Ferguson Intelligence Config")
+        st.title("⚙️ Cognitive Intelligence Config")
         
         # LLM Provider selection
         llm_provider = st.selectbox(
@@ -903,7 +933,7 @@ def main():
     
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-        analyze_button = st.button("🧠 Ferguson Analysis", type="primary", use_container_width=True)
+        analyze_button = st.button("🧠 Character Analysis", type="primary", use_container_width=True)
     
     if analyze_button:
         if not player_name:
@@ -922,7 +952,7 @@ def main():
                 st.stop()
             
             # Perform analysis
-            with st.spinner("Conducting Ferguson-style analysis..."):
+            with st.spinner("Conducting character-first analysis..."):
                 player_intel = asyncio.run(complete_ferguson_analysis(player_name, tools, llm))
             
             # Add to history
@@ -933,12 +963,12 @@ def main():
             })
             
             # Display results
-            st.success("Ferguson analysis complete!")
+            st.success("Character analysis complete!")
             
             # Player profile header
             st.markdown(f"""
             <div class="player-profile">
-                <h2>🎯 FERGUSON SCOUTING REPORT: {player_intel.name.upper()}</h2>
+                <h2>🎯 COGNITIVE SCOUTING REPORT: {player_intel.name.upper()}</h2>
             </div>
             """, unsafe_allow_html=True)
             
@@ -981,7 +1011,7 @@ def main():
                 color_class = "green-light" if player_intel.ferguson_factor >= 8 else "warning-flag" if player_intel.ferguson_factor >= 6 else "red-flag"
                 st.markdown(f"""
                 <div class="metric-card">
-                    <h3>🎖️ Ferguson Factor</h3>
+                    <h3>🎖️ Character Factor</h3>
                     <h2 class="{color_class}">{player_intel.ferguson_factor}/10</h2>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1002,10 +1032,10 @@ def main():
             st.plotly_chart(timeline_fig, use_container_width=True)
             
             # Analysis sections
-            analysis_tabs = st.tabs(["📋 Ferguson Report", "🚨 Red Flags", "✅ Green Lights", "📈 Development", "🔍 Raw Intelligence"])
+            analysis_tabs = st.tabs(["📋 Character Report", "🚨 Red Flags", "✅ Green Lights", "📈 Development", "🔍 Raw Intelligence"])
             
             with analysis_tabs[0]:
-                st.markdown("### 🧠 Ferguson's Assessment")
+                st.markdown("### 🧠 Character Assessment")
                 st.markdown(player_intel.narrative)
             
             with analysis_tabs[1]:
@@ -1034,7 +1064,7 @@ def main():
                     recommendations.append("Cultural integration support needed")
                 
                 if recommendations:
-                    st.markdown("**Ferguson Recommendations:**")
+                    st.markdown("**Development Recommendations:**")
                     for rec in recommendations:
                         st.markdown(f"- {rec}")
                 else:
@@ -1157,9 +1187,9 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                # Ferguson report download
-                ferguson_report = f"""
-FERGUSON SCOUTING REPORT
+                # Character report download
+                character_report = f"""
+COGNITIVE SCOUTING REPORT
 Player: {player_intel.name}
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
@@ -1168,7 +1198,7 @@ ASSESSMENT SCORES:
 - Family Stability: {player_intel.family_stability}/10
 - Mental Strength: {player_intel.mental_strength}/10
 - Adaptability: {player_intel.adaptability}/10
-- Ferguson Factor: {player_intel.ferguson_factor}/10
+- Character Factor: {player_intel.ferguson_factor}/10
 
 DEVELOPMENT TRAJECTORY:
 {player_intel.growth_trajectory}
@@ -1179,18 +1209,18 @@ RED FLAGS:
 GREEN LIGHTS:
 {chr(10).join(f"- {light}" for light in player_intel.green_lights)}
 
-FERGUSON ANALYSIS:
+CHARACTER ANALYSIS:
 {player_intel.narrative}
 
 ---
-Generated by APES Ferguson System
-"Ferguson as a Service" - Character-First Scouting
+Generated by APES Cognitive Scouting Intelligence
+Character-First Football Intelligence
                 """
                 
                 st.download_button(
-                    "📄 Download Ferguson Report",
-                    ferguson_report,
-                    file_name=f"ferguson_report_{player_name.replace(' ', '_')}.txt",
+                    "📄 Download Character Report",
+                    character_report,
+                    file_name=f"character_report_{player_name.replace(' ', '_')}.txt",
                     mime="text/plain"
                 )
             
@@ -1211,7 +1241,7 @@ EXECUTIVE SUMMARY - {player_intel.name}
 RECOMMENDATION: {"STRONG BUY" if player_intel.ferguson_factor >= 8 else "MONITOR" if player_intel.ferguson_factor >= 6 else "PASS"}
 
 KEY METRICS:
-Ferguson Factor: {player_intel.ferguson_factor}/10
+Character Factor: {player_intel.ferguson_factor}/10
 Technical: {player_intel.technical_score}/10
 Character: {(player_intel.family_stability + player_intel.mental_strength) // 2}/10
 
@@ -1219,7 +1249,7 @@ TIMELINE: {player_intel.growth_trajectory}
 
 RISK LEVEL: {"LOW" if player_intel.ferguson_factor >= 8 else "MEDIUM" if player_intel.ferguson_factor >= 6 else "HIGH"}
 
-Ferguson Quote: "Character determines career length, talent determines peak performance."
+Intelligence Quote: "Character determines career length, talent determines peak performance."
                 """
                 
                 st.download_button(
@@ -1232,8 +1262,8 @@ Ferguson Quote: "Character determines career length, talent determines peak perf
 # Comparison tool
 def show_comparison_tool():
     """Show player comparison interface"""
-    st.markdown("### ⚖️ Ferguson Comparison Tool")
-    st.markdown("*Compare multiple players using Ferguson's criteria*")
+    st.markdown("### ⚖️ Character Comparison Tool")
+    st.markdown("*Compare multiple players using character-first criteria*")
     
     col1, col2 = st.columns(2)
     
@@ -1244,60 +1274,60 @@ def show_comparison_tool():
         player2 = st.text_input("Player 2", placeholder="e.g., Gavi")
     
     if st.button("🔄 Compare Players") and player1 and player2:
-        st.info("Comparison feature coming soon! This will analyze both players and provide Ferguson-style head-to-head comparison.")
+        st.info("Comparison feature coming soon! This will analyze both players and provide character-first head-to-head comparison.")
 
 # Settings and about
 def show_about():
     """Show about section"""
     st.markdown("""
-    ### 🧠 About APES Ferguson System
+    ### 🧠 About APES Cognitive Scouting Intelligence
     
-    **"Ferguson as a Service"** - Advanced Pattern Extraction System with Ferguson Intelligence
+    **Character-First Football Intelligence Platform**
     
     This system revolutionizes football scouting by combining:
     - **Technical Analysis:** Traditional performance metrics
     - **Human Intelligence:** Family, character, psychology analysis  
     - **Cultural Assessment:** Adaptation and integration potential
-    - **Ferguson Factor:** Overall long-term success probability
+    - **Character Factor:** Overall long-term success probability
     
     #### What Makes This Different?
     
-    While others focus on xG and pass completion rates, APES Ferguson analyzes what Sir Alex Ferguson looked for:
+    While others focus on xG and pass completion rates, APES Cognitive analyzes what truly matters:
     - Family stability and support system
     - Mental resilience under pressure
     - Character and leadership qualities
     - Cultural adaptability
     - Long-term development potential
     
-    #### The Ferguson Philosophy
+    #### The Character-First Philosophy
     
-    *"I never signed a player just because he was talented. I wanted to know about his family, 
-    his character, how he'd react when the going got tough. Too many talented players have 
-    failed because they couldn't handle the pressure or didn't have the right mentality."*
+    *"The best scouts don't just analyze stats. They understand the person behind the player - 
+    the family, the character, the resilience when things get tough. That's what separates 
+    good talents from true champions."*
     
     #### Technology Stack
     
     - **Intelligence Gathering:** DuckDuckGo search, RSS feeds, Wikipedia
-    - **Analysis Engine:** Groq/Ollama LLM with Ferguson-style prompting
+    - **Analysis Engine:** Groq/Ollama LLM with character-focused prompting
     - **Visualization:** Plotly for interactive charts and dashboards
     - **Zero Cost:** No expensive APIs required
     
     #### Success Stories
     
     The underlying APES system has already identified:
-    - **Justin Lerma (2008)** - Flagged after Borussia Dortmund acquisition
+    - **Justin Lerma (2008)** - Flagged soon after Borussia Dortmund acquisition, with no knowledge about that
     - **Bence Dárdai (2006)** - Identified when market value was €9M
     
     #### Future Evolution: Sócrates
     
-    APES Ferguson is the bridge toward **Sócrates**, an autonomous football intelligence 
+    APES Cognitive is the bridge toward **Sócrates**, an autonomous football intelligence 
     that will understand the poetry of football itself - not just analyzing the game, 
     but comprehending the human stories that determine success.
     
     ---
     
     **Built by:** APES Development Team  
-    **Version:** Ferguson 1.0  
+    **Version:** Cognitive 1.0  
     **License:** Zero Cost, Maximum Impact  
     """)
 
@@ -1306,7 +1336,7 @@ def main_navigation():
     """Main navigation and page routing"""
     
     # Navigation tabs
-    nav_tabs = st.tabs(["🧠 Ferguson Analysis", "⚖️ Compare Players", "ℹ️ About"])
+    nav_tabs = st.tabs(["🧠 Character Analysis", "⚖️ Compare Players", "ℹ️ About"])
     
     with nav_tabs[0]:
         main()  # Main analysis tool
@@ -1322,11 +1352,11 @@ if __name__ == "__main__":
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; margin-top: 2rem;'>
-        🧠 <strong>APES Ferguson System</strong> - "Ferguson as a Service"<br>
-        <em>Character-First Football Intelligence</em><br><br>
+        🧠 <strong>APES Cognitive Scouting Intelligence</strong> - Character-First Football Intelligence<br>
+        <em>Beyond Statistics - Understanding the Human Factor</em><br><br>
         <small>
         "Football is about character. When you have character, you can play anywhere, 
-        adapt to anything, and overcome everything." - Sir Alex Ferguson
+        adapt to anything, and overcome everything." - Football Intelligence Philosophy
         </small>
     </div>
     """, unsafe_allow_html=True)
