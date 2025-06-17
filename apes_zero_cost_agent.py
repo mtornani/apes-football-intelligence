@@ -31,7 +31,117 @@ from pytrends.request import TrendReq
 try:
     from groq import Groq
 except ImportError:
-    Groq = None
+    Groq =             with analysis_tabs[4]:
+                st.markdown("### 🔍 Raw Intelligence Data")
+                
+                # Data quality indicator
+                total_intel = sum(len(results) for results in player_intel.raw_data.get('human_intel', {}).values())
+                high_rel = sum(1 for results in player_intel.raw_data.get('human_intel', {}).values() 
+                             for item in results if item.get('relevance', 0) > 3)
+                
+                # Data quality badge
+                if total_intel >= 10 and high_rel >= 3:
+                    quality_badge = "🟢 Good Data Coverage"
+                    quality_color = "green-light"
+                elif total_intel >= 5:
+                    quality_badge = "🟡 Partial Data Coverage"
+                    quality_color = "warning-flag"
+                else:
+                    quality_badge = "🔴 Limited Data Coverage"
+                    quality_color = "red-flag"
+                
+                st.markdown(f"**Data Quality:** <span class='{quality_color}'>{quality_badge}</span>", unsafe_allow_html=True)
+                st.markdown(f"*Total intelligence items: {total_intel} | High relevance: {high_rel}*")
+                st.divider()
+                
+                # Human Intelligence
+                if player_intel.raw_data.get('human_intel'):
+                    st.markdown("#### Human Intelligence Gathering")
+                    for category, results in player_intel.raw_data['human_intel'].items():
+                        if results:
+                            with st.expander(f"{category.replace('_', ' ').title()} ({len(results)} results)"):
+                                for i, result in enumerate(results[:3]):
+                                    st.markdown(f"**{i+1}. [{result['title']}]({result['link']})**")
+                                    st.markdown(f"*Relevance: {result['relevance']:.1f}% | Query: {result.get('query_used', 'N/A')}*")
+                                    st.markdown(result['snippet'][:200] + "...")
+                                    st.divider()
+                        else:
+                            st.markdown(f"**{category.replace('_', ' ').title()}:** No relevant data found")
+                
+                # Comparative Analysis
+                if player_intel.raw_data.get('comparative'):
+                    st.markdown("#### Comparative Analysis")
+                    comp_data = player_intel.raw_data['comparative']
+                    
+                    if comp_data.get('similar_players'):
+                        st.markdown("**Similar Players Identified:**")
+                        for player in comp_data['similar_players']:
+                            st.markdown(f"- {player}")
+                    else:
+                        st.markdown("**Similar Players:** None identified")
+                    
+                    if comp_data.get('success_patterns'):
+                        st.markdown("**Success Patterns Found:**")
+                        for pattern in comp_data['success_patterns']:
+                            st.markdown(f"- <span class='green-light'>{pattern}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**Success Patterns:** None identified")
+                    
+                    if comp_data.get('failure_warnings'):
+                        st.markdown("**Warning Signs Found:**")
+                        for warning in comp_data['failure_warnings']:
+                            st.markdown(f"- <span class='red-flag'>{warning}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**Warning Signs:** None identified")
+                else:
+                    st.markdown("#### Comparative Analysis")
+                    st.markdown("*No comparative data available*")
+                
+                # Contextual News
+                if player_intel.raw_data.get('news'):
+                    st.markdown("#### Recent Contextual News")
+                    news_items = [item for item in player_intel.raw_data['news'] if item.get('title')]
+                    if news_items:
+                        for news_item in news_items[:5]:
+                            st.markdown(f"**[{news_item['title']}]({news_item['link']})**")
+                            st.markdown(f"*Published: {news_item.get('published', 'Unknown')} | Human Relevance: {news_item.get('human_relevance', 0)}/10*")
+                            st.markdown(news_item.get('summary', 'No summary available'))
+                            st.divider()
+                    else:
+                        st.markdown("*No relevant news items found*")
+                else:
+                    st.markdown("#### Recent Contextual News")
+                    st.markdown("*No news data available*")
+                
+                # Search effectiveness analysis
+                st.markdown("#### Search Analysis")
+                st.markdown("**Search Strategy Effectiveness:**")
+                
+                effective_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if results]
+                failed_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if not results]
+                
+                if effective_categories:
+                    st.markdown("✅ **Successful searches:**")
+                    for cat in effective_categories:
+                        st.markdown(f"- {cat.replace('_', ' ').title()}")
+                
+                if failed_categories:
+                    st.markdown("❌ **Failed searches:**")
+                    for cat in failed_categories:
+                        st.markdown(f"- {cat.replace('_', ' ').title()}")
+                
+                # Recommendations for data improvement
+                if total_intel < 5:
+                    st.warning("⚠️ **Data Quality Warning:** Limited intelligence gathered. Consider:")
+                    st.markdown("- More specific player name variations")
+                    st.markdown("- Alternative search terms")
+                    st.markdown("- Direct club/academy sources")
+                    st.markdown("- Social media analysis")
+                elif high_rel == 0:
+                    st.warning("⚠️ **Relevance Warning:** No high-quality sources found. May indicate:")
+                    st.markdown("- Emerging talent with limited coverage")
+                    st.markdown("- Name spelling variations needed")
+                    st.markdown("- Private/academy player requiring direct contact")
 
 try:
     from langchain_community.llms import Ollama
@@ -135,30 +245,84 @@ class FergusonTools:
             self.pytrends = None
         
     def search_player_human_intel(self, player_name: str) -> Dict[str, List[Dict]]:
-        """Search for human intelligence about player"""
+        """Search for human intelligence about player with fallback strategies"""
+        
+        # Extract just first name and last name for broader searches
+        name_parts = player_name.split()
+        first_name = name_parts[0] if name_parts else player_name
+        last_name = name_parts[-1] if len(name_parts) > 1 else ""
+        
         searches = {
-            'family_background': f'"{player_name}" family parents background interview',
-            'psychological_profile': f'"{player_name}" pressure difficult moments reaction',
-            'cultural_adaptation': f'"{player_name}" new club adaptation integration',
-            'off_field_behavior': f'"{player_name}" character personality off field',
-            'youth_development': f'"{player_name}" youth academy development coach',
-            'leadership_qualities': f'"{player_name}" leadership captain team spirit',
-            'crisis_management': f'"{player_name}" injury setback comeback mental',
-            'social_media_pattern': f'"{player_name}" social media behavior posts'
+            'family_background': [
+                f'"{player_name}" family parents mother father',
+                f'{first_name} {last_name} family background',
+                f'{first_name} {last_name} parents interview'
+            ],
+            'psychological_profile': [
+                f'"{player_name}" personality character mentality',
+                f'{first_name} {last_name} mental strength pressure',
+                f'{first_name} {last_name} difficult moments reaction'
+            ],
+            'cultural_adaptation': [
+                f'"{player_name}" adaptation new club culture',
+                f'{first_name} {last_name} integration team',
+                f'{first_name} {last_name} cultural adjustment'
+            ],
+            'off_field_behavior': [
+                f'"{player_name}" character personality behavior',
+                f'{first_name} {last_name} off field lifestyle',
+                f'{first_name} {last_name} professional attitude'
+            ],
+            'youth_development': [
+                f'"{player_name}" youth academy development',
+                f'{first_name} {last_name} academy coach opinion',
+                f'{first_name} {last_name} youth career progression'
+            ],
+            'leadership_qualities': [
+                f'"{player_name}" leadership captain qualities',
+                f'{first_name} {last_name} team leader spirit',
+                f'{first_name} {last_name} captain material'
+            ],
+            'crisis_management': [
+                f'"{player_name}" injury comeback resilience',
+                f'{first_name} {last_name} setback recovery',
+                f'{first_name} {last_name} difficult period overcome'
+            ],
+            'social_media_pattern': [
+                f'"{player_name}" social media presence',
+                f'{first_name} {last_name} instagram twitter behavior',
+                f'{first_name} {last_name} social media activity'
+            ]
         }
         
         results = {}
-        for category, query in searches.items():
-            try:
-                search_results = list(self.ddgs.text(query, max_results=5))
-                results[category] = [{
-                    'title': r.get('title', ''),
-                    'link': r.get('link', ''),
-                    'snippet': r.get('body', ''),
-                    'relevance': self._calculate_relevance(r.get('body', ''), player_name)
-                } for r in search_results]
-            except Exception as e:
-                results[category] = []
+        for category, query_list in searches.items():
+            category_results = []
+            
+            # Try multiple query variations
+            for query in query_list:
+                try:
+                    search_results = list(self.ddgs.text(query, max_results=3))
+                    for r in search_results:
+                        if r not in category_results:  # Avoid duplicates
+                            category_results.append({
+                                'title': r.get('title', ''),
+                                'link': r.get('link', ''),
+                                'snippet': r.get('body', ''),
+                                'relevance': self._calculate_relevance(r.get('body', ''), player_name),
+                                'query_used': query
+                            })
+                    
+                    # If we got good results, don't need more queries for this category
+                    if len(category_results) >= 3:
+                        break
+                        
+                except Exception as e:
+                    continue
+            
+            # Sort by relevance and take top results
+            category_results.sort(key=lambda x: x['relevance'], reverse=True)
+            results[category] = category_results[:5]
                 
         return results
     
@@ -288,31 +452,44 @@ class FergusonLLM:
             self.client = None
     
     def analyze_player_intelligence(self, player_name: str, data: Dict) -> PlayerIntelligence:
-        """Generate Ferguson-style complete player analysis"""
+        """Generate Ferguson-style complete player analysis with structured output"""
         
+        # Create structured prompt for consistent JSON output
         prompt = f"""
         You are Sir Alex Ferguson analyzing {player_name} for potential signing.
         
-        You have this intelligence data:
-        Human Intelligence: {json.dumps(data.get('human_intel', {}), indent=2)}
-        Comparative Analysis: {json.dumps(data.get('comparative', {}), indent=2)}
-        Recent News: {json.dumps(data.get('news', []), indent=2)}
+        Based on this intelligence data, provide a structured analysis:
         
-        Analyze like Ferguson would - focus on:
-        1. Technical ability (0-10)
-        2. Family stability and support system (0-10)
-        3. Mental strength under pressure (0-10)
-        4. Cultural adaptability (0-10)
-        5. Overall "Ferguson Factor" - will he succeed long-term? (0-10)
+        INTELLIGENCE DATA:
+        {json.dumps(data, indent=2, default=str)}
         
-        Identify:
-        - Red flags (serious concerns)
-        - Green lights (strong positives)
-        - Growth trajectory over next 3 years
-        - A compelling narrative about who this player really is
+        You must respond with a valid JSON object containing exactly these fields:
+        {{
+            "technical_score": (integer 0-10),
+            "family_stability": (integer 0-10), 
+            "mental_strength": (integer 0-10),
+            "adaptability": (integer 0-10),
+            "ferguson_factor": (integer 0-10),
+            "growth_trajectory": "(string describing 3-year development path)",
+            "red_flags": ["flag1", "flag2", "flag3"],
+            "green_lights": ["positive1", "positive2", "positive3"],
+            "ferguson_analysis": "(detailed Ferguson-style narrative analysis)"
+        }}
         
-        Write like Ferguson: direct, insightful, human-focused.
-        Remember: Ferguson cared more about character than talent.
+        SCORING CRITERIA:
+        - Technical: Pure football ability and skill level
+        - Family Stability: Support system, background, upbringing quality  
+        - Mental Strength: Pressure handling, resilience, character
+        - Adaptability: Cultural integration, flexibility, learning ability
+        - Ferguson Factor: Overall long-term success probability at top level
+        
+        RED FLAGS: Serious concerns that could derail career
+        GREEN LIGHTS: Strong positives indicating success potential
+        
+        Base your analysis on Ferguson's philosophy: "Character beats talent when talent doesn't have character."
+        If data is limited, indicate this in your analysis but still provide reasonable estimates based on available information.
+        
+        IMPORTANT: Respond ONLY with the JSON object, no additional text.
         """
         
         if self.provider == "groq" and self.client:
@@ -320,26 +497,215 @@ class FergusonLLM:
                 response = self.client.chat.completions.create(
                     model="llama3-70b-8192",
                     messages=[
-                        {"role": "system", "content": "You are Sir Alex Ferguson analyzing football players with your legendary eye for character and potential."},
+                        {"role": "system", "content": "You are Sir Alex Ferguson. Respond only with valid JSON as requested. No additional text or explanation."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.7,
+                    temperature=0.3,  # Lower temperature for more consistent output
                     max_tokens=2000
                 )
-                analysis = response.choices[0].message.content
-                return self._parse_ferguson_analysis(player_name, analysis, data)
+                
+                analysis_text = response.choices[0].message.content.strip()
+                
+                # Try to parse JSON response
+                try:
+                    # Clean the response - remove any non-JSON content
+                    json_start = analysis_text.find('{')
+                    json_end = analysis_text.rfind('}') + 1
+                    if json_start >= 0 and json_end > json_start:
+                        json_text = analysis_text[json_start:json_end]
+                        analysis_json = json.loads(json_text)
+                        return self._create_player_intelligence_from_json(player_name, analysis_json, data)
+                    else:
+                        raise ValueError("No valid JSON found")
+                        
+                except (json.JSONDecodeError, ValueError) as e:
+                    # Fallback to text parsing if JSON parsing fails
+                    st.warning(f"JSON parsing failed, using text analysis fallback: {str(e)}")
+                    return self._parse_ferguson_analysis_robust(player_name, analysis_text, data)
+                    
             except Exception as e:
                 return self._create_mock_analysis(player_name, data, f"Groq error: {str(e)}")
         
         elif self.provider == "ollama" and self.llm:
             try:
                 analysis = self.llm.invoke(prompt)
-                return self._parse_ferguson_analysis(player_name, analysis, data)
+                # Try JSON parsing first, then fallback
+                try:
+                    json_start = analysis.find('{')
+                    json_end = analysis.rfind('}') + 1
+                    if json_start >= 0 and json_end > json_start:
+                        json_text = analysis[json_start:json_end]
+                        analysis_json = json.loads(json_text)
+                        return self._create_player_intelligence_from_json(player_name, analysis_json, data)
+                    else:
+                        raise ValueError("No valid JSON found")
+                except:
+                    return self._parse_ferguson_analysis_robust(player_name, analysis, data)
             except:
                 return self._create_mock_analysis(player_name, data, "Ollama not available")
         
         else:
-            return self._create_mock_analysis(player_name, data, "Mock mode")
+            return self._create_mock_analysis(player_name, data, "Mock mode - No LLM")
+    
+    def _create_player_intelligence_from_json(self, player_name: str, analysis_json: Dict, data: Dict) -> PlayerIntelligence:
+        """Create PlayerIntelligence from structured JSON response"""
+        
+        return PlayerIntelligence(
+            name=player_name,
+            technical_score=min(max(int(analysis_json.get('technical_score', 7)), 0), 10),
+            family_stability=min(max(int(analysis_json.get('family_stability', 7)), 0), 10),
+            mental_strength=min(max(int(analysis_json.get('mental_strength', 7)), 0), 10),
+            adaptability=min(max(int(analysis_json.get('adaptability', 7)), 0), 10),
+            ferguson_factor=min(max(int(analysis_json.get('ferguson_factor', 7)), 0), 10),
+            growth_trajectory=analysis_json.get('growth_trajectory', 'Steady development expected'),
+            red_flags=analysis_json.get('red_flags', ['Limited data available'])[:3],
+            green_lights=analysis_json.get('green_lights', ['Professional development path'])[:3],
+            narrative=analysis_json.get('ferguson_analysis', 'Analysis based on available data'),
+            raw_data=data
+        )
+    
+    def _parse_ferguson_analysis_robust(self, player_name: str, analysis: str, data: Dict) -> PlayerIntelligence:
+        """Robust text parsing with multiple fallback methods"""
+        
+        # Extract scores with multiple patterns
+        technical_score = self._extract_score_robust(analysis, ["technical", "skill", "ability"])
+        family_stability = self._extract_score_robust(analysis, ["family", "background", "support"])
+        mental_strength = self._extract_score_robust(analysis, ["mental", "character", "resilience", "pressure"])
+        adaptability = self._extract_score_robust(analysis, ["adaptability", "cultural", "integration", "flexibility"])
+        ferguson_factor = self._extract_score_robust(analysis, ["ferguson", "overall", "total", "final"])
+        
+        # Extract lists with robust patterns
+        red_flags = self._extract_list_robust(analysis, ["red flag", "concern", "warning", "risk", "negative"])
+        green_lights = self._extract_list_robust(analysis, ["green light", "positive", "strength", "asset", "advantage"])
+        
+        # Extract trajectory
+        growth_trajectory = self._extract_trajectory_robust(analysis)
+        
+        return PlayerIntelligence(
+            name=player_name,
+            technical_score=technical_score,
+            family_stability=family_stability,
+            mental_strength=mental_strength,
+            adaptability=adaptability,
+            ferguson_factor=ferguson_factor,
+            growth_trajectory=growth_trajectory,
+            red_flags=red_flags,
+            green_lights=green_lights,
+            narrative=analysis,
+            raw_data=data
+        )
+    
+    def _extract_score_robust(self, text: str, keywords: List[str]) -> int:
+        """Extract numerical score with multiple fallback patterns"""
+        
+        # Pattern 1: Direct keyword + number
+        for keyword in keywords:
+            patterns = [
+                rf"{keyword}[^0-9]*(\d+)(?:/10)?",
+                rf"{keyword}[^0-9]*:[ ]*(\d+)",
+                rf"{keyword}[^0-9]*score[^0-9]*(\d+)",
+                rf"(\d+)/10.*{keyword}",
+                rf"(\d+).*{keyword}"
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    score = int(match.group(1))
+                    return min(max(score, 0), 10)
+        
+        # Pattern 2: Look for any score mentions
+        score_patterns = [
+            r"(\d+)/10",
+            r"score.*?(\d+)",
+            r"rating.*?(\d+)",
+            r"(\d+) out of 10"
+        ]
+        
+        for pattern in score_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                scores = [int(m) for m in matches if int(m) <= 10]
+                if scores:
+                    return scores[0]
+        
+        # Fallback: Sentiment-based scoring
+        text_lower = text.lower()
+        positive_words = ['excellent', 'outstanding', 'brilliant', 'exceptional', 'superb', 'impressive']
+        good_words = ['good', 'solid', 'decent', 'reliable', 'promising', 'capable']
+        negative_words = ['poor', 'weak', 'concerning', 'limited', 'questionable', 'risky']
+        
+        if any(word in text_lower for word in positive_words):
+            return random.randint(8, 9)
+        elif any(word in text_lower for word in good_words):
+            return random.randint(6, 7)
+        elif any(word in text_lower for word in negative_words):
+            return random.randint(4, 6)
+        else:
+            return 7  # Default reasonable score
+    
+    def _extract_list_robust(self, text: str, keywords: List[str]) -> List[str]:
+        """Extract list items with multiple extraction methods"""
+        
+        items = []
+        
+        # Method 1: Find sections with keywords
+        for keyword in keywords:
+            section_pattern = rf"{keyword}[^:]*:([^\\n]+(?:\\n[^\\n]*)*?)(?:\\n\\n|\n\n|$)"
+            match = re.search(section_pattern, text, re.IGNORECASE | re.MULTILINE)
+            
+            if match:
+                section_text = match.group(1)
+                # Extract bullet points or lines
+                lines = section_text.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('-') or line.startswith('•') or line.startswith('*'):
+                        items.append(line[1:].strip())
+                    elif line and not line[0].isdigit():
+                        items.append(line)
+        
+        # Method 2: Look for contextual phrases
+        if not items:
+            for keyword in keywords:
+                # Find sentences containing keywords
+                sentences = re.split(r'[.!?]', text)
+                for sentence in sentences:
+                    if keyword.lower() in sentence.lower():
+                        # Extract meaningful phrases
+                        phrase = sentence.strip()
+                        if len(phrase) > 10 and len(phrase) < 100:
+                            items.append(phrase)
+        
+        # Method 3: Fallback based on data quality
+        if not items:
+            if "limited" in text.lower() or "insufficient" in text.lower():
+                items = ["Limited data available for assessment"]
+            elif "mock" in text.lower():
+                items = ["Analysis pending additional data"]
+            else:
+                items = ["Requires further investigation"]
+        
+        return items[:3]  # Return top 3 items
+    
+    def _extract_trajectory_robust(self, text: str) -> str:
+        """Extract growth trajectory with fallback methods"""
+        
+        trajectory_patterns = [
+            r"trajectory[^.]*[.]",
+            r"development[^.]*[.]",
+            r"growth[^.]*[.]",
+            r"potential[^.]*[.]",
+            r"future[^.]*[.]"
+        ]
+        
+        for pattern in trajectory_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(0).strip()
+        
+        # Fallback based on scores
+        return "Progressive development expected with proper guidance and opportunity"
     
     def _parse_ferguson_analysis(self, player_name: str, analysis: str, data: Dict) -> PlayerIntelligence:
         """Parse LLM analysis into structured format"""
@@ -373,46 +739,211 @@ class FergusonLLM:
         )
     
     def _create_mock_analysis(self, player_name: str, data: Dict, reason: str) -> PlayerIntelligence:
-        """Create mock analysis when LLM is not available"""
+        """Create realistic analysis when LLM unavailable - based on actual data only"""
         
-        # Generate realistic mock scores based on available data
-        base_score = random.randint(6, 9)
+        # Analyze ACTUAL available data only
+        human_intel = data.get('human_intel', {})
+        news = data.get('news', [])
+        comparative = data.get('comparative', {})
         
-        mock_red_flags = ["Limited international exposure", "Young age brings uncertainty"]
-        mock_green_lights = ["Strong youth development", "Professional attitude", "Family support"]
+        # Calculate data quality metrics
+        total_intel_items = sum(len(results) for results in human_intel.values())
+        high_relevance_items = sum(1 for results in human_intel.values() 
+                                 for item in results if item.get('relevance', 0) > 3)
         
-        mock_narrative = f"""
-        FERGUSON ANALYSIS: {player_name}
+        # Conservative scoring based on data availability
+        if total_intel_items > 10 and high_relevance_items > 3:
+            base_score = 7  # Reasonable baseline when we have good data
+        elif total_intel_items > 5:
+            base_score = 6  # Lower when limited data
+        else:
+            base_score = 5  # Very conservative when minimal data
         
-        My assessment of {player_name} based on available intelligence:
+        # Extract REAL flags from actual data
+        red_flags = []
+        green_lights = []
         
-        The lad shows promise, but like any young talent, there are questions to answer.
-        From what I can gather, he has the basic technical foundation and seems to come
-        from a stable background - that's always crucial at United.
+        # Look for actual patterns in gathered data
+        if comparative.get('failure_warnings'):
+            red_flags.extend(comparative['failure_warnings'][:2])
         
-        What I'd want to see is how he handles pressure and whether he can adapt
-        to our culture. Too many talented players have failed because they couldn't
-        handle the mental side of the game.
+        if comparative.get('success_patterns'):
+            green_lights.extend(comparative['success_patterns'][:2])
         
-        Worth monitoring closely. The potential is there, but character will determine
-        whether he makes it at the highest level.
+        # Data quality flags (honest assessment)
+        if total_intel_items < 3:
+            red_flags.append("Insufficient public information for assessment")
         
-        Note: {reason}
+        if high_relevance_items == 0:
+            red_flags.append("No high-quality sources found")
+        
+        # Positive flags only if we actually found evidence
+        if any('academy' in str(results).lower() for results in human_intel.values()):
+            green_lights.append("Youth development background identified")
+        
+        # Default to honest assessment if no data
+        if not red_flags:
+            red_flags = ["Limited data available for comprehensive assessment"]
+        
+        if not green_lights:
+            green_lights = ["Requires direct scouting for proper evaluation"]
+        
+        # Honest narrative about data limitations
+        narrative = f"""
+FERGUSON ASSESSMENT: {player_name}
+
+ASSESSMENT STATUS: {reason}
+
+DATA QUALITY REPORT:
+- Intelligence items gathered: {total_intel_items}
+- High-relevance sources: {high_relevance_items}
+- Data coverage: {'Partial' if total_intel_items > 5 else 'Limited'}
+
+PRELIMINARY ASSESSMENT:
+Based on available public information, this represents a {self._get_honest_assessment_level(total_intel_items)} assessment.
+
+{self._get_data_based_recommendation(total_intel_items, high_relevance_items)}
+
+FERGUSON'S RULE: "Never sign a player you haven't properly scouted."
+
+RECOMMENDATION: {self._get_honest_recommendation(total_intel_items)}
+
+Note: This analysis is limited by available public data. Direct scouting required for investment decision.
         """
         
         return PlayerIntelligence(
             name=player_name,
             technical_score=base_score,
-            family_stability=base_score + random.randint(-1, 1),
-            mental_strength=base_score + random.randint(-2, 1),
-            adaptability=base_score + random.randint(-1, 2),
-            ferguson_factor=base_score + random.randint(-1, 1),
-            growth_trajectory="Steady development expected over 2-3 years",
-            red_flags=mock_red_flags,
-            green_lights=mock_green_lights,
-            narrative=mock_narrative,
+            family_stability=base_score,
+            mental_strength=base_score,
+            adaptability=base_score,
+            ferguson_factor=max(base_score - 1, 1),  # Conservative Ferguson factor
+            growth_trajectory=f"Assessment incomplete - requires direct evaluation",
+            red_flags=red_flags[:3],
+            green_lights=green_lights[:3],
+            narrative=narrative,
             raw_data=data
         )
+    
+    def _get_honest_assessment_level(self, total_items: int) -> str:
+        """Honest assessment of data quality"""
+        if total_items >= 15:
+            return "preliminary but substantive"
+        elif total_items >= 8:
+            return "limited but useful"
+        elif total_items >= 3:
+            return "minimal"
+        else:
+            return "insufficient for decision-making"
+    
+    def _get_data_based_recommendation(self, total_items: int, high_rel: int) -> str:
+        """Recommendation based on actual data quality"""
+        if total_items >= 10 and high_rel >= 3:
+            return "Sufficient initial intelligence to warrant continued interest."
+        elif total_items >= 5:
+            return "Some intelligence gathered but gaps remain in character assessment."
+        else:
+            return "Insufficient intelligence for preliminary assessment."
+    
+    def _get_honest_recommendation(self, total_items: int) -> str:
+        """Honest next steps based on data availability"""
+        if total_items >= 10:
+            return "Proceed to live scouting phase"
+        elif total_items >= 5:
+            return "Gather additional intelligence before field assessment"
+        else:
+            return "Insufficient data - focus resources on better-documented targets"
+    
+    def _generate_intelligent_mock_narrative(self, player_name: str, tech: int, family: int, 
+                                           mental: int, adapt: int, ferguson: int,
+                                           total_items: int, high_rel_items: int, reason: str) -> str:
+        """Generate realistic Ferguson-style narrative based on scores and data quality"""
+        
+        # Determine overall assessment tone
+        if ferguson >= 8:
+            tone = "very promising"
+            recommendation = "strong interest"
+        elif ferguson >= 6:
+            tone = "decent prospect"
+            recommendation = "continued monitoring"
+        else:
+            tone = "concerning areas"
+            recommendation = "careful evaluation"
+        
+        narrative = f"""
+FERGUSON ASSESSMENT: {player_name}
+
+Based on the available intelligence, this is a {tone} young player who warrants {recommendation}.
+
+TECHNICAL ASSESSMENT ({tech}/10):
+{"The lad has shown good technical foundation" if tech >= 7 else "Technical skills need development, but there's potential"}. 
+{"Natural ability is evident" if tech >= 8 else "Solid basics with room for improvement"}.
+
+FAMILY & CHARACTER ({family}/10):
+{"Strong family background appears to be in place" if family >= 7 else "Family situation requires more investigation"}. 
+{"This kind of support system often produces resilient players" if family >= 8 else "Character development will be crucial"}.
+
+MENTAL STRENGTH ({mental}/10):
+{"Shows signs of good mental resilience" if mental >= 7 else "Mental fortitude remains a question mark"}. 
+{"The pressure handling seems adequate for his age" if mental >= 6 else "Will need significant mental conditioning"}.
+
+ADAPTABILITY ({adapt}/10):
+{"Should integrate well into new environments" if adapt >= 7 else "Cultural adaptation may require support"}. 
+{"Flexibility suggests coachability" if adapt >= 8 else "May need time to adjust to our methods"}.
+
+FERGUSON VERDICT ({ferguson}/10):
+{self._get_ferguson_verdict(ferguson)}
+
+DATA QUALITY NOTE:
+We gathered {total_items} intelligence items with {high_rel_items} high-relevance sources. 
+{"Good intelligence foundation for assessment" if total_items >= 10 else "Limited data suggests need for direct scouting"}.
+
+RECOMMENDATION:
+{self._get_recommendation(ferguson, total_items)}
+
+Note: {reason}
+        """.strip()
+        
+        return narrative
+    
+    def _get_ferguson_verdict(self, ferguson_factor: int) -> str:
+        """Get Ferguson-style verdict based on score"""
+        if ferguson_factor >= 9:
+            return "Exceptional prospect - the kind of character and ability that builds dynasties."
+        elif ferguson_factor >= 8:
+            return "Strong candidate - has the makings of a United player with proper development."
+        elif ferguson_factor >= 7:
+            return "Solid prospect - good foundation but needs careful nurturing."
+        elif ferguson_factor >= 6:
+            return "Potential there but significant development required."
+        elif ferguson_factor >= 5:
+            return "Risky proposition - would need to see dramatic improvement."
+        else:
+            return "Not recommended at this time - fundamental concerns about long-term success."
+    
+    def _get_recommendation(self, ferguson_factor: int, data_items: int) -> str:
+        """Get specific recommendation based on assessment"""
+        if ferguson_factor >= 8 and data_items >= 10:
+            return "Proceed with formal approach. Schedule direct meeting with player and family."
+        elif ferguson_factor >= 7:
+            return "Continue monitoring. Arrange live scouting at next 3-4 matches."
+        elif ferguson_factor >= 6:
+            return "Maintain interest but gather more intelligence before commitment."
+        elif data_items < 5:
+            return "Insufficient data for decision. Requires comprehensive scouting report."
+        else:
+            return "Focus resources on higher-probability targets."
+    
+    def _generate_trajectory(self, ferguson_factor: int) -> str:
+        """Generate development trajectory based on Ferguson Factor"""
+        if ferguson_factor >= 8:
+            return "Rapid development expected - could be first team ready within 18-24 months"
+        elif ferguson_factor >= 7:
+            return "Steady progression anticipated - 2-3 years to reach full potential"
+        elif ferguson_factor >= 6:
+            return "Gradual development likely - requires patient cultivation over 3-4 years"
+        else:
+            return "Uncertain trajectory - significant development hurdles to overcome"
     
     def _extract_score(self, text: str, keyword: str) -> int:
         """Extract numerical score from text"""
@@ -776,8 +1307,8 @@ def main():
             with analysis_tabs[3]:
                 st.markdown("### 📈 Development Trajectory")
                 st.markdown(f"**Growth Path:** {player_intel.growth_trajectory}")
-                
-                # Create development recommendations
+
+# Create development recommendations
                 recommendations = []
                 if player_intel.technical_score < 7:
                     recommendations.append("Focus on technical skill development")
