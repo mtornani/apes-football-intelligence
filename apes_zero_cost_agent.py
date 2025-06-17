@@ -1,8 +1,8 @@
 # apes_ferguson_system.py
 """
-APES Ferguson Football Intelligence System
-"Ferguson as a Service" - Complete Human + Technical Scouting
-Zero Cost, Maximum Impact
+APES Cognitive Scouting Intelligence
+"Character-First Player Analysis"
+Beyond Statistics - Understanding the Human Factor
 """
 
 import asyncio
@@ -31,117 +31,7 @@ from pytrends.request import TrendReq
 try:
     from groq import Groq
 except ImportError:
-    Groq =             with analysis_tabs[4]:
-                st.markdown("### 🔍 Raw Intelligence Data")
-                
-                # Data quality indicator
-                total_intel = sum(len(results) for results in player_intel.raw_data.get('human_intel', {}).values())
-                high_rel = sum(1 for results in player_intel.raw_data.get('human_intel', {}).values() 
-                             for item in results if item.get('relevance', 0) > 3)
-                
-                # Data quality badge
-                if total_intel >= 10 and high_rel >= 3:
-                    quality_badge = "🟢 Good Data Coverage"
-                    quality_color = "green-light"
-                elif total_intel >= 5:
-                    quality_badge = "🟡 Partial Data Coverage"
-                    quality_color = "warning-flag"
-                else:
-                    quality_badge = "🔴 Limited Data Coverage"
-                    quality_color = "red-flag"
-                
-                st.markdown(f"**Data Quality:** <span class='{quality_color}'>{quality_badge}</span>", unsafe_allow_html=True)
-                st.markdown(f"*Total intelligence items: {total_intel} | High relevance: {high_rel}*")
-                st.divider()
-                
-                # Human Intelligence
-                if player_intel.raw_data.get('human_intel'):
-                    st.markdown("#### Human Intelligence Gathering")
-                    for category, results in player_intel.raw_data['human_intel'].items():
-                        if results:
-                            with st.expander(f"{category.replace('_', ' ').title()} ({len(results)} results)"):
-                                for i, result in enumerate(results[:3]):
-                                    st.markdown(f"**{i+1}. [{result['title']}]({result['link']})**")
-                                    st.markdown(f"*Relevance: {result['relevance']:.1f}% | Query: {result.get('query_used', 'N/A')}*")
-                                    st.markdown(result['snippet'][:200] + "...")
-                                    st.divider()
-                        else:
-                            st.markdown(f"**{category.replace('_', ' ').title()}:** No relevant data found")
-                
-                # Comparative Analysis
-                if player_intel.raw_data.get('comparative'):
-                    st.markdown("#### Comparative Analysis")
-                    comp_data = player_intel.raw_data['comparative']
-                    
-                    if comp_data.get('similar_players'):
-                        st.markdown("**Similar Players Identified:**")
-                        for player in comp_data['similar_players']:
-                            st.markdown(f"- {player}")
-                    else:
-                        st.markdown("**Similar Players:** None identified")
-                    
-                    if comp_data.get('success_patterns'):
-                        st.markdown("**Success Patterns Found:**")
-                        for pattern in comp_data['success_patterns']:
-                            st.markdown(f"- <span class='green-light'>{pattern}</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("**Success Patterns:** None identified")
-                    
-                    if comp_data.get('failure_warnings'):
-                        st.markdown("**Warning Signs Found:**")
-                        for warning in comp_data['failure_warnings']:
-                            st.markdown(f"- <span class='red-flag'>{warning}</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("**Warning Signs:** None identified")
-                else:
-                    st.markdown("#### Comparative Analysis")
-                    st.markdown("*No comparative data available*")
-                
-                # Contextual News
-                if player_intel.raw_data.get('news'):
-                    st.markdown("#### Recent Contextual News")
-                    news_items = [item for item in player_intel.raw_data['news'] if item.get('title')]
-                    if news_items:
-                        for news_item in news_items[:5]:
-                            st.markdown(f"**[{news_item['title']}]({news_item['link']})**")
-                            st.markdown(f"*Published: {news_item.get('published', 'Unknown')} | Human Relevance: {news_item.get('human_relevance', 0)}/10*")
-                            st.markdown(news_item.get('summary', 'No summary available'))
-                            st.divider()
-                    else:
-                        st.markdown("*No relevant news items found*")
-                else:
-                    st.markdown("#### Recent Contextual News")
-                    st.markdown("*No news data available*")
-                
-                # Search effectiveness analysis
-                st.markdown("#### Search Analysis")
-                st.markdown("**Search Strategy Effectiveness:**")
-                
-                effective_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if results]
-                failed_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if not results]
-                
-                if effective_categories:
-                    st.markdown("✅ **Successful searches:**")
-                    for cat in effective_categories:
-                        st.markdown(f"- {cat.replace('_', ' ').title()}")
-                
-                if failed_categories:
-                    st.markdown("❌ **Failed searches:**")
-                    for cat in failed_categories:
-                        st.markdown(f"- {cat.replace('_', ' ').title()}")
-                
-                # Recommendations for data improvement
-                if total_intel < 5:
-                    st.warning("⚠️ **Data Quality Warning:** Limited intelligence gathered. Consider:")
-                    st.markdown("- More specific player name variations")
-                    st.markdown("- Alternative search terms")
-                    st.markdown("- Direct club/academy sources")
-                    st.markdown("- Social media analysis")
-                elif high_rel == 0:
-                    st.warning("⚠️ **Relevance Warning:** No high-quality sources found. May indicate:")
-                    st.markdown("- Emerging talent with limited coverage")
-                    st.markdown("- Name spelling variations needed")
-                    st.markdown("- Private/academy player requiring direct contact")
+    Groq = None
 
 try:
     from langchain_community.llms import Ollama
@@ -379,7 +269,7 @@ class FergusonTools:
         player_mentions = text_lower.count(player_name.lower())
         human_mentions = sum(1 for keyword in human_keywords if keyword in text_lower)
         
-        return (player_mentions * 2 + human_mentions) / len(text.split()) * 100
+        return (player_mentions * 2 + human_mentions) / max(len(text.split()), 1) * 100
     
     def _extract_player_names(self, articles: List[Dict]) -> List[str]:
         """Extract mentioned player names from articles"""
@@ -524,7 +414,7 @@ class FergusonLLM:
                     return self._parse_ferguson_analysis_robust(player_name, analysis_text, data)
                     
             except Exception as e:
-                return self._create_mock_analysis(player_name, data, f"Groq error: {str(e)}")
+                return self._create_honest_analysis(player_name, data, f"Groq error: {str(e)}")
         
         elif self.provider == "ollama" and self.llm:
             try:
@@ -542,10 +432,10 @@ class FergusonLLM:
                 except:
                     return self._parse_ferguson_analysis_robust(player_name, analysis, data)
             except:
-                return self._create_mock_analysis(player_name, data, "Ollama not available")
+                return self._create_honest_analysis(player_name, data, "Ollama not available")
         
         else:
-            return self._create_mock_analysis(player_name, data, "Mock mode - No LLM")
+            return self._create_honest_analysis(player_name, data, "Mock mode - No LLM")
     
     def _create_player_intelligence_from_json(self, player_name: str, analysis_json: Dict, data: Dict) -> PlayerIntelligence:
         """Create PlayerIntelligence from structured JSON response"""
@@ -629,20 +519,8 @@ class FergusonLLM:
                 if scores:
                     return scores[0]
         
-        # Fallback: Sentiment-based scoring
-        text_lower = text.lower()
-        positive_words = ['excellent', 'outstanding', 'brilliant', 'exceptional', 'superb', 'impressive']
-        good_words = ['good', 'solid', 'decent', 'reliable', 'promising', 'capable']
-        negative_words = ['poor', 'weak', 'concerning', 'limited', 'questionable', 'risky']
-        
-        if any(word in text_lower for word in positive_words):
-            return random.randint(8, 9)
-        elif any(word in text_lower for word in good_words):
-            return random.randint(6, 7)
-        elif any(word in text_lower for word in negative_words):
-            return random.randint(4, 6)
-        else:
-            return 7  # Default reasonable score
+        # Fallback: Conservative baseline
+        return 6  # Conservative reasonable score
     
     def _extract_list_robust(self, text: str, keywords: List[str]) -> List[str]:
         """Extract list items with multiple extraction methods"""
@@ -681,8 +559,6 @@ class FergusonLLM:
         if not items:
             if "limited" in text.lower() or "insufficient" in text.lower():
                 items = ["Limited data available for assessment"]
-            elif "mock" in text.lower():
-                items = ["Analysis pending additional data"]
             else:
                 items = ["Requires further investigation"]
         
@@ -707,38 +583,7 @@ class FergusonLLM:
         # Fallback based on scores
         return "Progressive development expected with proper guidance and opportunity"
     
-    def _parse_ferguson_analysis(self, player_name: str, analysis: str, data: Dict) -> PlayerIntelligence:
-        """Parse LLM analysis into structured format"""
-        
-        # Extract scores using regex or simple parsing
-        technical_score = self._extract_score(analysis, "technical")
-        family_stability = self._extract_score(analysis, "family")
-        mental_strength = self._extract_score(analysis, "mental")
-        adaptability = self._extract_score(analysis, "adaptability|cultural")
-        ferguson_factor = self._extract_score(analysis, "ferguson factor|overall")
-        
-        # Extract lists
-        red_flags = self._extract_list_items(analysis, "red flag")
-        green_lights = self._extract_list_items(analysis, "green light")
-        
-        # Extract trajectory
-        growth_trajectory = self._extract_trajectory(analysis)
-        
-        return PlayerIntelligence(
-            name=player_name,
-            technical_score=technical_score,
-            family_stability=family_stability,
-            mental_strength=mental_strength,
-            adaptability=adaptability,
-            ferguson_factor=ferguson_factor,
-            growth_trajectory=growth_trajectory,
-            red_flags=red_flags,
-            green_lights=green_lights,
-            narrative=analysis,
-            raw_data=data
-        )
-    
-    def _create_mock_analysis(self, player_name: str, data: Dict, reason: str) -> PlayerIntelligence:
+    def _create_honest_analysis(self, player_name: str, data: Dict, reason: str) -> PlayerIntelligence:
         """Create realistic analysis when LLM unavailable - based on actual data only"""
         
         # Analyze ACTUAL available data only
@@ -853,137 +698,6 @@ Note: This analysis is limited by available public data. Direct scouting require
             return "Gather additional intelligence before field assessment"
         else:
             return "Insufficient data - focus resources on better-documented targets"
-    
-    def _generate_intelligent_mock_narrative(self, player_name: str, tech: int, family: int, 
-                                           mental: int, adapt: int, ferguson: int,
-                                           total_items: int, high_rel_items: int, reason: str) -> str:
-        """Generate realistic Ferguson-style narrative based on scores and data quality"""
-        
-        # Determine overall assessment tone
-        if ferguson >= 8:
-            tone = "very promising"
-            recommendation = "strong interest"
-        elif ferguson >= 6:
-            tone = "decent prospect"
-            recommendation = "continued monitoring"
-        else:
-            tone = "concerning areas"
-            recommendation = "careful evaluation"
-        
-        narrative = f"""
-FERGUSON ASSESSMENT: {player_name}
-
-Based on the available intelligence, this is a {tone} young player who warrants {recommendation}.
-
-TECHNICAL ASSESSMENT ({tech}/10):
-{"The lad has shown good technical foundation" if tech >= 7 else "Technical skills need development, but there's potential"}. 
-{"Natural ability is evident" if tech >= 8 else "Solid basics with room for improvement"}.
-
-FAMILY & CHARACTER ({family}/10):
-{"Strong family background appears to be in place" if family >= 7 else "Family situation requires more investigation"}. 
-{"This kind of support system often produces resilient players" if family >= 8 else "Character development will be crucial"}.
-
-MENTAL STRENGTH ({mental}/10):
-{"Shows signs of good mental resilience" if mental >= 7 else "Mental fortitude remains a question mark"}. 
-{"The pressure handling seems adequate for his age" if mental >= 6 else "Will need significant mental conditioning"}.
-
-ADAPTABILITY ({adapt}/10):
-{"Should integrate well into new environments" if adapt >= 7 else "Cultural adaptation may require support"}. 
-{"Flexibility suggests coachability" if adapt >= 8 else "May need time to adjust to our methods"}.
-
-FERGUSON VERDICT ({ferguson}/10):
-{self._get_ferguson_verdict(ferguson)}
-
-DATA QUALITY NOTE:
-We gathered {total_items} intelligence items with {high_rel_items} high-relevance sources. 
-{"Good intelligence foundation for assessment" if total_items >= 10 else "Limited data suggests need for direct scouting"}.
-
-RECOMMENDATION:
-{self._get_recommendation(ferguson, total_items)}
-
-Note: {reason}
-        """.strip()
-        
-        return narrative
-    
-    def _get_ferguson_verdict(self, ferguson_factor: int) -> str:
-        """Get Ferguson-style verdict based on score"""
-        if ferguson_factor >= 9:
-            return "Exceptional prospect - the kind of character and ability that builds dynasties."
-        elif ferguson_factor >= 8:
-            return "Strong candidate - has the makings of a United player with proper development."
-        elif ferguson_factor >= 7:
-            return "Solid prospect - good foundation but needs careful nurturing."
-        elif ferguson_factor >= 6:
-            return "Potential there but significant development required."
-        elif ferguson_factor >= 5:
-            return "Risky proposition - would need to see dramatic improvement."
-        else:
-            return "Not recommended at this time - fundamental concerns about long-term success."
-    
-    def _get_recommendation(self, ferguson_factor: int, data_items: int) -> str:
-        """Get specific recommendation based on assessment"""
-        if ferguson_factor >= 8 and data_items >= 10:
-            return "Proceed with formal approach. Schedule direct meeting with player and family."
-        elif ferguson_factor >= 7:
-            return "Continue monitoring. Arrange live scouting at next 3-4 matches."
-        elif ferguson_factor >= 6:
-            return "Maintain interest but gather more intelligence before commitment."
-        elif data_items < 5:
-            return "Insufficient data for decision. Requires comprehensive scouting report."
-        else:
-            return "Focus resources on higher-probability targets."
-    
-    def _generate_trajectory(self, ferguson_factor: int) -> str:
-        """Generate development trajectory based on Ferguson Factor"""
-        if ferguson_factor >= 8:
-            return "Rapid development expected - could be first team ready within 18-24 months"
-        elif ferguson_factor >= 7:
-            return "Steady progression anticipated - 2-3 years to reach full potential"
-        elif ferguson_factor >= 6:
-            return "Gradual development likely - requires patient cultivation over 3-4 years"
-        else:
-            return "Uncertain trajectory - significant development hurdles to overcome"
-    
-    def _extract_score(self, text: str, keyword: str) -> int:
-        """Extract numerical score from text"""
-        pattern = rf"{keyword}[^0-9]*(\d+)(?:/10)?"
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return min(int(match.group(1)), 10)
-        return random.randint(6, 8)  # Default reasonable score
-    
-    def _extract_list_items(self, text: str, list_type: str) -> List[str]:
-        """Extract list items (red flags, green lights)"""
-        # Simple extraction - could be enhanced
-        lines = text.split('\n')
-        items = []
-        in_section = False
-        
-        for line in lines:
-            if list_type.lower() in line.lower():
-                in_section = True
-                continue
-            if in_section:
-                if line.strip().startswith('-') or line.strip().startswith('•'):
-                    items.append(line.strip()[1:].strip())
-                elif line.strip() and not line[0].isalpha():
-                    in_section = False
-                elif len(items) >= 3:
-                    break
-        
-        return items[:3] if items else [f"Analysis needed for {list_type}"]
-    
-    def _extract_trajectory(self, text: str) -> str:
-        """Extract growth trajectory from analysis"""
-        trajectory_keywords = ["trajectory", "development", "growth", "future", "potential"]
-        lines = text.split('\n')
-        
-        for line in lines:
-            if any(keyword in line.lower() for keyword in trajectory_keywords):
-                return line.strip()
-        
-        return "Promising development expected with proper guidance"
 
 def create_player_dashboard(player_intel: PlayerIntelligence):
     """Create visual dashboard for player intelligence"""
@@ -1307,8 +1021,8 @@ def main():
             with analysis_tabs[3]:
                 st.markdown("### 📈 Development Trajectory")
                 st.markdown(f"**Growth Path:** {player_intel.growth_trajectory}")
-
-# Create development recommendations
+                
+                # Create development recommendations
                 recommendations = []
                 if player_intel.technical_score < 7:
                     recommendations.append("Focus on technical skill development")
@@ -1329,6 +1043,26 @@ def main():
             with analysis_tabs[4]:
                 st.markdown("### 🔍 Raw Intelligence Data")
                 
+                # Data quality indicator
+                total_intel = sum(len(results) for results in player_intel.raw_data.get('human_intel', {}).values())
+                high_rel = sum(1 for results in player_intel.raw_data.get('human_intel', {}).values() 
+                             for item in results if item.get('relevance', 0) > 3)
+                
+                # Data quality badge
+                if total_intel >= 10 and high_rel >= 3:
+                    quality_badge = "🟢 Good Data Coverage"
+                    quality_color = "green-light"
+                elif total_intel >= 5:
+                    quality_badge = "🟡 Partial Data Coverage"
+                    quality_color = "warning-flag"
+                else:
+                    quality_badge = "🔴 Limited Data Coverage"
+                    quality_color = "red-flag"
+                
+                st.markdown(f"**Data Quality:** <span class='{quality_color}'>{quality_badge}</span>", unsafe_allow_html=True)
+                st.markdown(f"*Total intelligence items: {total_intel} | High relevance: {high_rel}*")
+                st.divider()
+                
                 # Human Intelligence
                 if player_intel.raw_data.get('human_intel'):
                     st.markdown("#### Human Intelligence Gathering")
@@ -1337,9 +1071,11 @@ def main():
                             with st.expander(f"{category.replace('_', ' ').title()} ({len(results)} results)"):
                                 for i, result in enumerate(results[:3]):
                                     st.markdown(f"**{i+1}. [{result['title']}]({result['link']})**")
-                                    st.markdown(f"*Relevance: {result['relevance']:.1f}%*")
+                                    st.markdown(f"*Relevance: {result['relevance']:.1f}% | Query: {result.get('query_used', 'N/A')}*")
                                     st.markdown(result['snippet'][:200] + "...")
                                     st.divider()
+                        else:
+                            st.markdown(f"**{category.replace('_', ' ').title()}:** No relevant data found")
                 
                 # Comparative Analysis
                 if player_intel.raw_data.get('comparative'):
@@ -1347,28 +1083,74 @@ def main():
                     comp_data = player_intel.raw_data['comparative']
                     
                     if comp_data.get('similar_players'):
-                        st.markdown("**Similar Players:**")
+                        st.markdown("**Similar Players Identified:**")
                         for player in comp_data['similar_players']:
                             st.markdown(f"- {player}")
+                    else:
+                        st.markdown("**Similar Players:** None identified")
                     
                     if comp_data.get('success_patterns'):
                         st.markdown("**Success Patterns Found:**")
                         for pattern in comp_data['success_patterns']:
                             st.markdown(f"- <span class='green-light'>{pattern}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**Success Patterns:** None identified")
                     
                     if comp_data.get('failure_warnings'):
                         st.markdown("**Warning Signs Found:**")
                         for warning in comp_data['failure_warnings']:
                             st.markdown(f"- <span class='red-flag'>{warning}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**Warning Signs:** None identified")
+                else:
+                    st.markdown("#### Comparative Analysis")
+                    st.markdown("*No comparative data available*")
                 
                 # Contextual News
                 if player_intel.raw_data.get('news'):
                     st.markdown("#### Recent Contextual News")
-                    for news_item in player_intel.raw_data['news'][:5]:
-                        st.markdown(f"**[{news_item['title']}]({news_item['link']})**")
-                        st.markdown(f"*Published: {news_item['published']} | Human Relevance: {news_item['human_relevance']}/10*")
-                        st.markdown(news_item['summary'])
-                        st.divider()
+                    news_items = [item for item in player_intel.raw_data['news'] if item.get('title')]
+                    if news_items:
+                        for news_item in news_items[:5]:
+                            st.markdown(f"**[{news_item['title']}]({news_item['link']})**")
+                            st.markdown(f"*Published: {news_item.get('published', 'Unknown')} | Human Relevance: {news_item.get('human_relevance', 0)}/10*")
+                            st.markdown(news_item.get('summary', 'No summary available'))
+                            st.divider()
+                    else:
+                        st.markdown("*No relevant news items found*")
+                else:
+                    st.markdown("#### Recent Contextual News")
+                    st.markdown("*No news data available*")
+                
+                # Search effectiveness analysis
+                st.markdown("#### Search Analysis")
+                st.markdown("**Search Strategy Effectiveness:**")
+                
+                effective_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if results]
+                failed_categories = [cat for cat, results in player_intel.raw_data.get('human_intel', {}).items() if not results]
+                
+                if effective_categories:
+                    st.markdown("✅ **Successful searches:**")
+                    for cat in effective_categories:
+                        st.markdown(f"- {cat.replace('_', ' ').title()}")
+                
+                if failed_categories:
+                    st.markdown("❌ **Failed searches:**")
+                    for cat in failed_categories:
+                        st.markdown(f"- {cat.replace('_', ' ').title()}")
+                
+                # Recommendations for data improvement
+                if total_intel < 5:
+                    st.warning("⚠️ **Data Quality Warning:** Limited intelligence gathered. Consider:")
+                    st.markdown("- More specific player name variations")
+                    st.markdown("- Alternative search terms")
+                    st.markdown("- Direct club/academy sources")
+                    st.markdown("- Social media analysis")
+                elif high_rel == 0:
+                    st.warning("⚠️ **Relevance Warning:** No high-quality sources found. May indicate:")
+                    st.markdown("- Emerging talent with limited coverage")
+                    st.markdown("- Name spelling variations needed")
+                    st.markdown("- Private/academy player requiring direct contact")
             
             # Download section
             st.markdown("---")
@@ -1416,7 +1198,7 @@ Generated by APES Ferguson System
                 # Raw data download
                 st.download_button(
                     "📊 Download Raw Data",
-                    json.dumps(player_intel.raw_data, indent=2),
+                    json.dumps(player_intel.raw_data, indent=2, default=str),
                     file_name=f"raw_intelligence_{player_name.replace(' ', '_')}.json",
                     mime="application/json"
                 )
@@ -1503,8 +1285,8 @@ def show_about():
     #### Success Stories
     
     The underlying APES system has already identified:
-    - **Justin Lerma (2008)** - Flagged before Borussia Dortmund acquisition
-    - **Bence Dárdai (2006)** - Identified when market value was €0.9M
+    - **Justin Lerma (2008)** - Flagged after Borussia Dortmund acquisition
+    - **Bence Dárdai (2006)** - Identified when market value was €9M
     
     #### Future Evolution: Sócrates
     
