@@ -322,48 +322,73 @@ class FergusonTools:
     def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
         """Discover unknown talents based on search criteria"""
         
-        # Build discovery search queries
+        # Build discovery search queries - simplified and more effective
         age_queries = {
-            "15-17 (Academy)": ["academy graduate 2007 2008", "youth prospect 15 16 17", "academy breakthrough young"],
-            "18-20 (Breakthrough)": ["breakthrough 2004 2005 2006", "young talent 18 19 20", "first team debut young"],
-            "21-23 (Emerging)": ["emerging talent 2001 2002 2003", "rising star 21 22 23", "potential breakthrough"],
-            "Any Age": ["young talent", "rising star", "breakthrough player"]
+            "15-17 (Academy)": ["wonderkid 2007 2008", "young talent 16 17", "academy prospect"],
+            "18-20 (Breakthrough)": ["breakthrough 2004 2005", "young player 18 19", "debut 2024"],
+            "21-23 (Emerging)": ["emerging talent 2001 2002", "rising star 21 22", "transfer 2024"],
+            "Any Age": ["wonderkid", "young talent", "breakthrough"]
         }
         
         region_queries = {
-            "South America": ["Brazil academy", "Argentina prospect", "Colombia talent", "Ecuador wonderkid", "South American"],
-            "Eastern Europe": ["Polish talent", "Czech prospect", "Serbian player", "Croatian wonderkid", "Eastern European"],
-            "Africa": ["Nigerian prospect", "Senegalese talent", "Ghanaian player", "African wonderkid", "Ivory Coast"],
-            "Asia": ["Japanese talent", "Korean prospect", "Asian wonderkid", "J-League youth", "K-League"],
-            "Lower European Leagues": ["League Two talent", "lower division", "non-league prospect", "amateur breakthrough"],
-            "Any Region": ["wonderkid", "prospect", "talent"]
+            "South America": ["Brazil wonderkid", "Argentina talent", "Colombian player", "Ecuadorian"],
+            "Eastern Europe": ["Polish talent", "Czech player", "Serbian wonderkid", "Croatian"],
+            "Africa": ["Nigerian wonderkid", "Senegalese talent", "Ghanaian player", "African"],
+            "Asia": ["Japanese talent", "Korean player", "Asian wonderkid"],
+            "Lower European Leagues": ["League Two talent", "lower division wonderkid", "non-league"],
+            "Any Region": ["football wonderkid", "soccer talent", "young prospect"]
         }
         
         position_queries = {
-            "Midfielder": ["midfielder prospect", "central midfielder", "attacking midfielder", "defensive midfielder"],
-            "Forward": ["striker prospect", "winger talent", "forward wonderkid", "goalscorer"],
-            "Defender": ["defender prospect", "centre back", "fullback talent", "defensive prospect"],
-            "Goalkeeper": ["goalkeeper prospect", "keeper talent", "young goalkeeper"],
-            "Any Position": ["football prospect", "soccer talent", "young player"]
+            "Midfielder": ["midfielder wonderkid", "midfield talent", "central midfielder"],
+            "Forward": ["striker wonderkid", "forward talent", "goalscorer"],
+            "Defender": ["defender wonderkid", "centre back talent", "defensive"],
+            "Goalkeeper": ["goalkeeper wonderkid", "keeper talent", "young goalkeeper"],
+            "Any Position": ["football wonderkid", "soccer talent", "young player"]
         }
         
-        # Combine search terms
+        # Combine search terms - simpler combinations
         discovery_queries = []
         
-        for age_term in age_queries.get(age_range, ["young talent"]):
-            for region_term in region_queries.get(league_region, ["wonderkid"]):
-                for pos_term in position_queries.get(position, ["prospect"]):
-                    base_query = f"{age_term} {region_term} {pos_term}"
-                    if additional_terms:
-                        base_query += f" {additional_terms}"
-                    discovery_queries.append(base_query)
+        age_terms = age_queries.get(age_range, ["young talent"])
+        region_terms = region_queries.get(league_region, ["wonderkid"])
+        pos_terms = position_queries.get(position, ["prospect"])
         
-        # Execute discovery searches
+        # Create focused queries
+        for age_term in age_terms:
+            for region_term in region_terms:
+                # Simple two-term combinations
+                query = f"{age_term} {region_term}"
+                if additional_terms:
+                    query += f" {additional_terms}"
+                discovery_queries.append(query)
+        
+        # Add position-specific queries
+        for pos_term in pos_terms:
+            for region_term in region_terms:
+                query = f"{pos_term} {region_term}"
+                if additional_terms:
+                    query += f" {additional_terms}"
+                discovery_queries.append(query)
+        
+        # Add some generic effective queries
+        discovery_queries.extend([
+            "wonderkid 2024 transfer",
+            "young talent breakthrough 2024",
+            "academy graduate 2024",
+            f"{league_region} wonderkid 2024" if league_region != "Any Region" else "wonderkid 2024"
+        ])
+        
+        # Execute discovery searches with better error handling
         discovered_players = []
         
-        for query in discovery_queries[:5]:  # Limit to avoid overloading
+        for query in discovery_queries[:8]:  # Increased to 8 queries
             try:
-                search_results = list(self.ddgs.text(query, max_results=5))
+                search_results = list(self.ddgs.text(query, max_results=8))  # More results per query
+                
+                if not search_results:
+                    continue
+                
                 for result in search_results:
                     # Extract potential player names from results
                     potential_players = self._extract_player_names_from_discovery(result)
@@ -379,6 +404,7 @@ class FergusonTools:
                                 }
                                 discovered_players.append(player_entry)
             except Exception as e:
+                # Continue with next query if this one fails
                 continue
         
         # Filter out invalid entries and sort by relevance
@@ -390,6 +416,39 @@ class FergusonTools:
                 p.get('source_relevance', 0) > 0):
                 valid_players.append(p)
         
+        # Add fallback discovery if no results
+        if not valid_players and len(discovery_queries) > 0:
+            # Try some very generic searches as fallback
+            fallback_queries = [
+                "young footballer 2024",
+                "football wonderkid",
+                "rising star player",
+                "teenage footballer talent"
+            ]
+            
+            for query in fallback_queries:
+                try:
+                    search_results = list(self.ddgs.text(query, max_results=10))
+                    for result in search_results:
+                        potential_players = self._extract_player_names_from_discovery(result)
+                        for player_info in potential_players:
+                            if player_info and isinstance(player_info, dict) and player_info.get('name'):
+                                existing_names = [p.get('name', '') for p in valid_players if isinstance(p, dict)]
+                                if player_info['name'] not in existing_names:
+                                    player_entry = {
+                                        **player_info,
+                                        'discovery_query': f"Fallback: {query}",
+                                        'source_relevance': 1.0  # Low but valid score
+                                    }
+                                    valid_players.append(player_entry)
+                                    if len(valid_players) >= 5:  # Stop when we have enough
+                                        break
+                        if len(valid_players) >= 5:
+                            break
+                    if len(valid_players) >= 5:
+                        break
+                except:
+                    continue
         # Sort by relevance
         valid_players.sort(key=lambda x: x['source_relevance'], reverse=True)
         return valid_players[:10]  # Top 10 discoveries
@@ -401,13 +460,16 @@ class FergusonTools:
             
         text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
         
-        # Enhanced patterns for extracting player info
+        # Enhanced patterns for extracting player info - more permissive
         patterns = [
-            r'(\w+ \w+)(?:,? (?:aged? )?(\d{1,2}))?[^.]*(?:midfielder|forward|striker|defender|goalkeeper|winger)',
-            r'(\w+ \w+)[^.]*(?:academy|youth|prospect|talent|wonderkid)',
-            r'(?:signing|signed|acquired) (\w+ \w+)',
-            r'(\w+ \w+)[^.]*(?:breakthrough|debut|first team)',
-            r'(\w+ \w+)[^.]*(?:born (?:in )?(\d{4}))',
+            r'(\w+ \w+),?\s*(?:aged?\s*)?(\d{1,2})?[^.]*(?:midfielder|forward|striker|defender|goalkeeper|winger|player)',
+            r'(\w+ \w+)[^.]*(?:academy|youth|prospect|talent|wonderkid|signing|signed)',
+            r'(?:player|talent|prospect)\s+(\w+ \w+)',
+            r'(\w+ \w+)[^.]*(?:breakthrough|debut|first team|transfer)',
+            r'(\w+ \w+)[^.]*(?:born|age|years old)',
+            r'(\w+\s+\w+)(?:\s+is|\s+has|\s+was)',  # "John Smith is/has/was"
+            r'signed\s+(\w+ \w+)',
+            r'(\w+ \w+)\s+(?:from|to|at)',  # "John Smith from/to/at"
         ]
         
         found_players = []
@@ -422,10 +484,11 @@ class FergusonTools:
                         name = str(match)
                         age_or_year = ""
                     
-                    # Filter out common false positives
+                    # More lenient filtering for player names
                     if (len(name.split()) == 2 and 
-                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from']) and
-                        len(name) > 5):
+                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from', 'new', 'old', 'first', 'last', 'this', 'that']) and
+                        len(name) > 4 and
+                        name[0].isupper()):  # Must start with capital letter
                         
                         player_info = {
                             'name': name.title(),
