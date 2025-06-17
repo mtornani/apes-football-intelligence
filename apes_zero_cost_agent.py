@@ -368,7 +368,7 @@ class FergusonTools:
                     # Extract potential player names from results
                     potential_players = self._extract_player_names_from_discovery(result)
                     for player_info in potential_players:
-                        if player_info not in discovered_players:
+                        if player_info and player_info not in discovered_players:
                             discovered_players.append({
                                 **player_info,
                                 'discovery_query': query,
@@ -377,8 +377,9 @@ class FergusonTools:
             except Exception as e:
                 continue
         
-        # Sort by relevance and remove duplicates
-        discovered_players.sort(key=lambda x: x['source_relevance'], reverse=True)
+        # Filter out None values and sort by relevance
+        discovered_players = [p for p in discovered_players if p is not None and p.get('source_relevance', 0) > 0]
+        discovered_players.sort(key=lambda x: x.get('source_relevance', 0), reverse=True)
         return discovered_players[:10]  # Top 10 discoveries
     
     def _extract_player_names_from_discovery(self, article: Dict) -> List[Dict]:
@@ -1005,7 +1006,8 @@ def main():
         # LLM Provider selection
         llm_provider = st.selectbox(
             "Intelligence Provider",
-            ["Groq (Free)", "Ollama (Local)", "Mock Analysis"]
+            ["Groq (Free)", "Ollama (Local)", "Mock Analysis"],
+            key="llm_provider_sidebar"
         )
         
         if llm_provider == "Groq (Free)":
@@ -1076,7 +1078,8 @@ def main():
     analysis_mode = st.radio(
         "Analysis Mode:",
         ["🔍 Known Player Analysis", "🌟 Discovery Mode - Find Unknown Talents"],
-        horizontal=True
+        horizontal=True,
+        key="analysis_mode_radio"
     )
     
     if analysis_mode == "🔍 Known Player Analysis":
@@ -1102,21 +1105,24 @@ def main():
             age_range = st.selectbox(
                 "Age Range",
                 ["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"],
-                index=["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"].index(preset['age_range']) if preset else 0
+                index=["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"].index(preset['age_range']) if preset else 0,
+                key="discovery_age_range"
             )
         
         with disco2:
             league_region = st.selectbox(
                 "League/Region",
                 ["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"],
-                index=["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"].index(preset['league_region']) if preset else 0
+                index=["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"].index(preset['league_region']) if preset else 0,
+                key="discovery_league_region"
             )
         
         with disco3:
             position = st.selectbox(
                 "Position",
                 ["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"],
-                index=["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"].index(preset['position']) if preset else 0
+                index=["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"].index(preset['position']) if preset else 0,
+                key="discovery_position"
             )
         
         # Clear preset after use
@@ -1128,12 +1134,13 @@ def main():
         with col_search1:
             discovery_terms = st.text_input(
                 "Additional Search Terms (optional):",
-                placeholder="e.g., wonderkid, academy graduate, breakthrough, rising star"
+                placeholder="e.g., wonderkid, academy graduate, breakthrough, rising star",
+                key="discovery_terms_input"
             )
         
         with col_search2:
             st.markdown("<br>", unsafe_allow_html=True)
-            discover_button = st.button("🔍 Discover Talents", type="primary", use_container_width=True)
+            discover_button = st.button("🔍 Discover Talents", type="primary", use_container_width=True, key="discover_talents_button")
         
         player_name = None  # No specific name in discovery mode
         analyze_button = discover_button
@@ -1530,12 +1537,12 @@ def show_comparison_tool():
     col1, col2 = st.columns(2)
     
     with col1:
-        player1 = st.text_input("Player 1", placeholder="e.g., Pedri")
+        player1 = st.text_input("Player 1", placeholder="e.g., Pedri", key="comparison_player1")
     
     with col2:
-        player2 = st.text_input("Player 2", placeholder="e.g., Gavi")
+        player2 = st.text_input("Player 2", placeholder="e.g., Gavi", key="comparison_player2")
     
-    if st.button("🔄 Compare Players") and player1 and player2:
+    if st.button("🔄 Compare Players", key="compare_players_button") and player1 and player2:
         st.info("Comparison feature coming soon! This will analyze both players and provide character-first head-to-head comparison.")
 
 # Settings and about
@@ -1577,8 +1584,8 @@ def show_about():
     #### Success Stories
     
     The underlying APES system has already identified:
-    - **Justin Lerma (2008)** - Flagged before Borussia Dortmund acquisition
-    - **Bence Dárdai (2006)** - Identified when market value was €0.9M
+    - **Justin Lerma (2008)** - Flagged soon after BvB transfer move, even without connection with sources
+    - **Bence Dárdai (2006)** - Identified when market value was €9M
     
     #### Future Evolution: Sócrates
     
