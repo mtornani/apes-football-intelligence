@@ -983,7 +983,7 @@ async def complete_ferguson_analysis(player_name: str, tools: FergusonTools, llm
     
     return player_intel
 
-def main():
+def main(tab_context="main"):
     """Main Streamlit application"""
     
     # Header
@@ -1007,7 +1007,7 @@ def main():
         llm_provider = st.selectbox(
             "Intelligence Provider",
             ["Groq (Free)", "Ollama (Local)", "Mock Analysis"],
-            key="llm_provider_sidebar"
+            key=f"llm_provider_{tab_context}"
         )
         
         if llm_provider == "Groq (Free)":
@@ -1039,7 +1039,7 @@ def main():
         ]
         
         for player in quick_players:
-            if st.button(player, key=f"quick_{player}"):
+            if st.button(player, key=f"quick_{player}_{tab_context}"):
                 st.session_state.player_name = player
         
         st.divider()
@@ -1054,7 +1054,7 @@ def main():
         ]
         
         for preset_name, age, region, pos in discovery_presets:
-            if st.button(preset_name, key=f"discover_{preset_name}"):
+            if st.button(preset_name, key=f"discover_{preset_name}_{tab_context}"):
                 st.session_state.discovery_preset = {
                     'age_range': age,
                     'league_region': region, 
@@ -1068,7 +1068,7 @@ def main():
         if st.session_state.research_history:
             st.markdown("### 📚 Recent Analysis")
             for i, research in enumerate(st.session_state.research_history[-3:]):
-                if st.button(f"{research['player']} ({research['date']})", key=f"history_{i}"):
+                if st.button(f"{research['player']} ({research['date']})", key=f"history_{i}_{tab_context}"):
                     st.session_state.player_name = research['player']
     
     # Main content
@@ -1079,7 +1079,7 @@ def main():
         "Analysis Mode:",
         ["🔍 Known Player Analysis", "🌟 Discovery Mode - Find Unknown Talents"],
         horizontal=True,
-        key="analysis_mode_radio"
+        key=f"analysis_mode_{tab_context}"
     )
     
     if analysis_mode == "🔍 Known Player Analysis":
@@ -1106,7 +1106,7 @@ def main():
                 "Age Range",
                 ["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"],
                 index=["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"].index(preset['age_range']) if preset else 0,
-                key="discovery_age_range"
+                key=f"discovery_age_{tab_context}"
             )
         
         with disco2:
@@ -1114,7 +1114,7 @@ def main():
                 "League/Region",
                 ["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"],
                 index=["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"].index(preset['league_region']) if preset else 0,
-                key="discovery_league_region"
+                key=f"discovery_region_{tab_context}"
             )
         
         with disco3:
@@ -1122,7 +1122,7 @@ def main():
                 "Position",
                 ["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"],
                 index=["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"].index(preset['position']) if preset else 0,
-                key="discovery_position"
+                key=f"discovery_pos_{tab_context}"
             )
         
         # Clear preset after use
@@ -1135,12 +1135,12 @@ def main():
             discovery_terms = st.text_input(
                 "Additional Search Terms (optional):",
                 placeholder="e.g., wonderkid, academy graduate, breakthrough, rising star",
-                key="discovery_terms_input"
+                key=f"discovery_terms_{tab_context}"
             )
         
         with col_search2:
             st.markdown("<br>", unsafe_allow_html=True)
-            discover_button = st.button("🔍 Discover Talents", type="primary", use_container_width=True, key="discover_talents_button")
+            discover_button = st.button("🔍 Discover Talents", type="primary", use_container_width=True, key=f"discover_btn_{tab_context}")
         
         player_name = None  # No specific name in discovery mode
         analyze_button = discover_button
@@ -1175,7 +1175,7 @@ def main():
                             st.markdown(f"**Discovery Query:** {player_info['discovery_query']}")
                         
                         with col2:
-                            if st.button(f"🧠 Analyze {player_info['name']}", key=f"analyze_{i}"):
+                            if st.button(f"🧠 Analyze {player_info['name']}", key=f"analyze_{i}_{tab_context}"):
                                 # Set the discovered player for analysis
                                 st.session_state.player_name = player_info['name']
                                 st.session_state.discovery_context = player_info
@@ -1584,8 +1584,8 @@ def show_about():
     #### Success Stories
     
     The underlying APES system has already identified:
-    - **Justin Lerma (2008)** - Flagged soon after BvB transfer move, even without connection with sources
-    - **Bence Dárdai (2006)** - Identified when market value was €9M
+    - **Justin Lerma (2008)** - Flagged before Borussia Dortmund acquisition
+    - **Bence Dárdai (2006)** - Identified when market value was €0.9M
     
     #### Future Evolution: Sócrates
     
@@ -1630,10 +1630,5 @@ if __name__ == "__main__":
     </div>
     """, unsafe_allow_html=True)
     
-    # Check if running as main app or in navigation
-    try:
-        # If we're in a navigation context, show full navigation
-        main_navigation()
-    except:
-        # If standalone, just run main analysis
-        main()
+    # Run main navigation directly
+    main_navigation()
