@@ -379,16 +379,18 @@ class FergusonTools:
             f"{league_region} wonderkid 2024" if league_region != "Any Region" else "wonderkid 2024"
         ])
         
-        # Execute discovery searches with better error handling
+        # Execute discovery searches with better error handling and variety
         discovered_players = []
+        successful_queries = []
         
-        for query in discovery_queries[:8]:  # Increased to 8 queries
+        for query in discovery_queries[:8]:  # Try up to 8 queries
             try:
-                search_results = list(self.ddgs.text(query, max_results=8))  # More results per query
+                search_results = list(self.ddgs.text(query, max_results=6))
                 
                 if not search_results:
                     continue
                 
+                query_found_players = False
                 for result in search_results:
                     # Extract potential player names from results
                     potential_players = self._extract_player_names_from_discovery(result)
@@ -397,12 +399,21 @@ class FergusonTools:
                             # Check for duplicates by name
                             existing_names = [p.get('name', '') for p in discovered_players if isinstance(p, dict)]
                             if player_info['name'] not in existing_names:
-                                player_entry = {
-                                    **player_info,
-                                    'discovery_query': query,
-                                    'source_relevance': self._calculate_discovery_relevance(result, age_range, position)
-                                }
-                                discovered_players.append(player_entry)
+                                relevance = self._calculate_discovery_relevance(result, age_range, position)
+                                
+                                # Only add if relevance is meaningful
+                                if relevance > 0.5:
+                                    player_entry = {
+                                        **player_info,
+                                        'discovery_query': query,
+                                        'source_relevance': relevance
+                                    }
+                                    discovered_players.append(player_entry)
+                                    query_found_players = True
+                
+                if query_found_players:
+                    successful_queries.append(query)
+                    
             except Exception as e:
                 # Continue with next query if this one fails
                 continue
@@ -416,36 +427,41 @@ class FergusonTools:
                 p.get('source_relevance', 0) > 0):
                 valid_players.append(p)
         
-        # Add fallback discovery if no results
+        # Add fallback discovery if no results - but with better scoring
         if not valid_players and len(discovery_queries) > 0:
             # Try some very generic searches as fallback
             fallback_queries = [
-                "young footballer 2024",
-                "football wonderkid",
-                "rising star player",
-                "teenage footballer talent"
+                "football wonderkid 2024 breakthrough",
+                "young footballer talent scout",
+                "academy graduate 2024 debut",
+                "rising star football player 2024",
+                "teenage footballer prospect",
+                "youth football talent emerging"
             ]
             
             for query in fallback_queries:
                 try:
-                    search_results = list(self.ddgs.text(query, max_results=10))
+                    search_results = list(self.ddgs.text(query, max_results=12))
                     for result in search_results:
                         potential_players = self._extract_player_names_from_discovery(result)
                         for player_info in potential_players:
                             if player_info and isinstance(player_info, dict) and player_info.get('name'):
                                 existing_names = [p.get('name', '') for p in valid_players if isinstance(p, dict)]
                                 if player_info['name'] not in existing_names:
+                                    # Calculate proper relevance score even for fallback
+                                    relevance = self._calculate_discovery_relevance(result, age_range, position)
+                                    
                                     player_entry = {
                                         **player_info,
-                                        'discovery_query': f"Fallback: {query}",
-                                        'source_relevance': 1.0  # Low but valid score
+                                        'discovery_query': f"Enhanced: {query}",
+                                        'source_relevance': max(relevance, 0.5)  # Minimum 0.5 instead of 1.0
                                     }
                                     valid_players.append(player_entry)
-                                    if len(valid_players) >= 5:  # Stop when we have enough
+                                    if len(valid_players) >= 8:  # Get more results
                                         break
-                        if len(valid_players) >= 5:
+                        if len(valid_players) >= 8:
                             break
-                    if len(valid_players) >= 5:
+                    if len(valid_players) >= 8:
                         break
                 except:
                     continue
@@ -1266,7 +1282,9 @@ def main(tab_context="main"):
                 st.markdown("### 🎯 Discovered Talents")
                 
                 for i, player_info in enumerate(discovered_players):
-                    with st.expander(f"⭐ {player_info['name']} - Relevance Score: {player_info['source_relevance']}"):
+                    relevance_color = "🔥" if player_info['source_relevance'] >= 10 else "⭐" if player_info['source_relevance'] >= 5 else "💡"
+                    
+                    with st.expander(f"{relevance_color} {player_info['name']} - Relevance Score: {player_info['source_relevance']:.1f}"):
                         col1, col2 = st.columns([2, 1])
                         
                         with col1:
@@ -1275,6 +1293,10 @@ def main(tab_context="main"):
                             st.markdown(f"**Context:** {player_info['context']}")
                             st.markdown(f"**Source:** [{player_info['source_title']}]({player_info['source_link']})")
                             st.markdown(f"**Discovery Query:** {player_info['discovery_query']}")
+                            
+                            # Show relevance breakdown for high scores
+                            if player_info['source_relevance'] >= 5:
+                                st.markdown("**🎯 High Relevance Match!**")
                         
                         with col2:
                             # Use a form to prevent immediate rerun
