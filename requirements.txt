@@ -9,3 +9,4 @@ pandas
 groq
 langchain-community
 ollama
+plotly
