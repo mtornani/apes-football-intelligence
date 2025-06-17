@@ -1175,8 +1175,14 @@ def main(tab_context="main"):
         "Analysis Mode:",
         ["🔍 Known Player Analysis", "🌟 Discovery Mode - Find Unknown Talents"],
         horizontal=True,
-        key=f"analysis_mode_{tab_context}"
+        key=f"analysis_mode_{tab_context}",
+        index=0 if st.session_state.get('switch_to_known_analysis', False) else (1 if st.session_state.get('stay_in_discovery', False) else 0)
     )
+    
+    # Clear the switch flag after using it
+    if st.session_state.get('switch_to_known_analysis', False):
+        st.session_state.switch_to_known_analysis = False
+        analysis_mode = "🔍 Known Player Analysis"
     
     if analysis_mode == "🔍 Known Player Analysis":
         with col1:
@@ -1271,11 +1277,16 @@ def main(tab_context="main"):
                             st.markdown(f"**Discovery Query:** {player_info['discovery_query']}")
                         
                         with col2:
-                            if st.button(f"🧠 Analyze {player_info['name']}", key=f"analyze_{i}_{tab_context}"):
-                                # Set the discovered player for analysis
-                                st.session_state.player_name = player_info['name']
-                                st.session_state.discovery_context = player_info
-                                st.rerun()
+                            # Use a form to prevent immediate rerun
+                            with st.form(key=f"analyze_form_{i}_{tab_context}"):
+                                analyze_clicked = st.form_submit_button(f"🧠 Analyze {player_info['name']}", use_container_width=True)
+                                
+                                if analyze_clicked:
+                                    # Set the discovered player for analysis and switch mode
+                                    st.session_state.player_name = player_info['name']
+                                    st.session_state.discovery_context = player_info
+                                    st.session_state.switch_to_known_analysis = True
+                                    st.rerun()
                 
                 st.info("💡 **Tip:** Click 'Analyze' on any discovered player to run full character assessment")
             else:
