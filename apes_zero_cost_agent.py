@@ -319,6 +319,134 @@ class FergusonTools:
         
         return list(set(found_warnings))
     
+    def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
+        """Discover unknown talents based on search criteria"""
+        
+        # Build discovery search queries
+        age_queries = {
+            "15-17 (Academy)": ["academy graduate 2007 2008", "youth prospect 15 16 17", "academy breakthrough young"],
+            "18-20 (Breakthrough)": ["breakthrough 2004 2005 2006", "young talent 18 19 20", "first team debut young"],
+            "21-23 (Emerging)": ["emerging talent 2001 2002 2003", "rising star 21 22 23", "potential breakthrough"],
+            "Any Age": ["young talent", "rising star", "breakthrough player"]
+        }
+        
+        region_queries = {
+            "South America": ["Brazil academy", "Argentina prospect", "Colombia talent", "Ecuador wonderkid", "South American"],
+            "Eastern Europe": ["Polish talent", "Czech prospect", "Serbian player", "Croatian wonderkid", "Eastern European"],
+            "Africa": ["Nigerian prospect", "Senegalese talent", "Ghanaian player", "African wonderkid", "Ivory Coast"],
+            "Asia": ["Japanese talent", "Korean prospect", "Asian wonderkid", "J-League youth", "K-League"],
+            "Lower European Leagues": ["League Two talent", "lower division", "non-league prospect", "amateur breakthrough"],
+            "Any Region": ["wonderkid", "prospect", "talent"]
+        }
+        
+        position_queries = {
+            "Midfielder": ["midfielder prospect", "central midfielder", "attacking midfielder", "defensive midfielder"],
+            "Forward": ["striker prospect", "winger talent", "forward wonderkid", "goalscorer"],
+            "Defender": ["defender prospect", "centre back", "fullback talent", "defensive prospect"],
+            "Goalkeeper": ["goalkeeper prospect", "keeper talent", "young goalkeeper"],
+            "Any Position": ["football prospect", "soccer talent", "young player"]
+        }
+        
+        # Combine search terms
+        discovery_queries = []
+        
+        for age_term in age_queries.get(age_range, ["young talent"]):
+            for region_term in region_queries.get(league_region, ["wonderkid"]):
+                for pos_term in position_queries.get(position, ["prospect"]):
+                    base_query = f"{age_term} {region_term} {pos_term}"
+                    if additional_terms:
+                        base_query += f" {additional_terms}"
+                    discovery_queries.append(base_query)
+        
+        # Execute discovery searches
+        discovered_players = []
+        
+        for query in discovery_queries[:5]:  # Limit to avoid overloading
+            try:
+                search_results = list(self.ddgs.text(query, max_results=5))
+                for result in search_results:
+                    # Extract potential player names from results
+                    potential_players = self._extract_player_names_from_discovery(result)
+                    for player_info in potential_players:
+                        if player_info not in discovered_players:
+                            discovered_players.append({
+                                **player_info,
+                                'discovery_query': query,
+                                'source_relevance': self._calculate_discovery_relevance(result, age_range, position)
+                            })
+            except Exception as e:
+                continue
+        
+        # Sort by relevance and remove duplicates
+        discovered_players.sort(key=lambda x: x['source_relevance'], reverse=True)
+        return discovered_players[:10]  # Top 10 discoveries
+    
+    def _extract_player_names_from_discovery(self, article: Dict) -> List[Dict]:
+        """Extract player names and info from discovery articles"""
+        text = article.get('body', '') + ' ' + article.get('title', '')
+        
+        # Enhanced patterns for extracting player info
+        patterns = [
+            r'(\w+ \w+)(?:,? (?:aged? )?(\d{1,2}))?[^.]*(?:midfielder|forward|striker|defender|goalkeeper|winger)',
+            r'(\w+ \w+)[^.]*(?:academy|youth|prospect|talent|wonderkid)',
+            r'(?:signing|signed|acquired) (\w+ \w+)',
+            r'(\w+ \w+)[^.]*(?:breakthrough|debut|first team)',
+            r'(\w+ \w+)[^.]*(?:born (?:in )?(\d{4}))',
+        ]
+        
+        found_players = []
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    name = match[0] if match[0] else ""
+                    age_or_year = match[1] if len(match) > 1 and match[1] else ""
+                else:
+                    name = match
+                    age_or_year = ""
+                
+                # Filter out common false positives
+                if (len(name.split()) == 2 and 
+                    not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from']) and
+                    len(name) > 5):
+                    
+                    found_players.append({
+                        'name': name.title(),
+                        'age_info': age_or_year,
+                        'source_title': article.get('title', ''),
+                        'source_link': article.get('link', ''),
+                        'context': self._extract_context(text, name)
+                    })
+        
+        return found_players[:3]  # Top 3 from each article
+    
+    def _extract_context(self, text: str, player_name: str) -> str:
+        """Extract relevant context around player name"""
+        # Find sentences containing the player name
+        sentences = re.split(r'[.!?]', text)
+        relevant_sentences = [s.strip() for s in sentences if player_name.lower() in s.lower()]
+        
+        if relevant_sentences:
+            return relevant_sentences[0][:150] + "..."
+        return ""
+    
+    def _calculate_discovery_relevance(self, article: Dict, age_range: str, position: str) -> float:
+        """Calculate how relevant an article is for talent discovery"""
+        text = (article.get('body', '') + ' ' + article.get('title', '')).lower()
+        
+        relevance_keywords = [
+            'academy', 'youth', 'prospect', 'talent', 'wonderkid', 'breakthrough', 
+            'debut', 'signing', 'transfer', 'scout', 'potential', 'rising', 'emerging'
+        ]
+        
+        age_keywords = ['young', '16', '17', '18', '19', '20', 'teenage', 'academy']
+        position_keywords = position.lower().split() if position != "Any Position" else []
+        
+        score = 0
+        score += sum(2 for keyword in relevance_keywords if keyword in text)
+        score += sum(1 for keyword in age_keywords if keyword in text)
+        score += sum(3 for keyword in position_keywords if keyword in text)
+        
     def _assess_human_relevance(self, text: str) -> float:
         """Assess how relevant news is for human intelligence"""
         human_keywords = ['interview', 'personality', 'family', 'character', 'mental', 
@@ -902,7 +1030,7 @@ def main():
         st.markdown("### 🎯 Quick Analysis")
         quick_players = [
             "Pedri Barcelona",
-            "Jude Bellingham",
+            "Jude Bellingham", 
             "Jamal Musiala Bayern",
             "Gavi Barcelona",
             "Eduardo Camavinga"
@@ -911,6 +1039,26 @@ def main():
         for player in quick_players:
             if st.button(player, key=f"quick_{player}"):
                 st.session_state.player_name = player
+        
+        st.divider()
+        
+        # Quick Discovery Searches
+        st.markdown("### 🌟 Quick Discovery")
+        discovery_presets = [
+            ("South American Midfielders", "18-20 (Breakthrough)", "South America", "Midfielder"),
+            ("Eastern European Defenders", "21-23 (Emerging)", "Eastern Europe", "Defender"),
+            ("African Wingers", "15-17 (Academy)", "Africa", "Forward"),
+            ("Asian Prospects", "Any Age", "Asia", "Any Position")
+        ]
+        
+        for preset_name, age, region, pos in discovery_presets:
+            if st.button(preset_name, key=f"discover_{preset_name}"):
+                st.session_state.discovery_preset = {
+                    'age_range': age,
+                    'league_region': region, 
+                    'position': pos,
+                    'terms': ''
+                }
         
         st.divider()
         
@@ -924,21 +1072,116 @@ def main():
     # Main content
     col1, col2 = st.columns([2, 1])
     
-    with col1:
-        player_name = st.text_input(
-            "Enter Player Name:",
-            value=st.session_state.get('player_name', ''),
-            placeholder="e.g., Pedri Barcelona, Jude Bellingham, Jamal Musiala"
-        )
+    # Add mode selection
+    analysis_mode = st.radio(
+        "Analysis Mode:",
+        ["🔍 Known Player Analysis", "🌟 Discovery Mode - Find Unknown Talents"],
+        horizontal=True
+    )
     
-    with col2:
-        st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-        analyze_button = st.button("🧠 Character Analysis", type="primary", use_container_width=True)
+    if analysis_mode == "🔍 Known Player Analysis":
+        with col1:
+            player_name = st.text_input(
+                "Enter Player Name:",
+                value=st.session_state.get('player_name', ''),
+                placeholder="e.g., Pedri Barcelona, Jude Bellingham, Jamal Musiala"
+            )
+        
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+            analyze_button = st.button("🧠 Character Analysis", type="primary", use_container_width=True)
+    
+    else:  # Discovery Mode
+        st.markdown("### 🌟 Discovery Mode - Find Hidden Talents")
+        
+        # Check for preset discovery parameters
+        preset = st.session_state.get('discovery_preset', None)
+        
+        disco1, disco2, disco3 = st.columns(3)
+        with disco1:
+            age_range = st.selectbox(
+                "Age Range",
+                ["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"],
+                index=["15-17 (Academy)", "18-20 (Breakthrough)", "21-23 (Emerging)", "Any Age"].index(preset['age_range']) if preset else 0
+            )
+        
+        with disco2:
+            league_region = st.selectbox(
+                "League/Region",
+                ["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"],
+                index=["South America", "Eastern Europe", "Africa", "Asia", "Lower European Leagues", "Any Region"].index(preset['league_region']) if preset else 0
+            )
+        
+        with disco3:
+            position = st.selectbox(
+                "Position",
+                ["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"],
+                index=["Midfielder", "Forward", "Defender", "Goalkeeper", "Any Position"].index(preset['position']) if preset else 0
+            )
+        
+        # Clear preset after use
+        if preset:
+            del st.session_state.discovery_preset
+        
+        # Discovery search terms
+        col_search1, col_search2 = st.columns([3, 1])
+        with col_search1:
+            discovery_terms = st.text_input(
+                "Additional Search Terms (optional):",
+                placeholder="e.g., wonderkid, academy graduate, breakthrough, rising star"
+            )
+        
+        with col_search2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            discover_button = st.button("🔍 Discover Talents", type="primary", use_container_width=True)
+        
+        player_name = None  # No specific name in discovery mode
+        analyze_button = discover_button
     
     if analyze_button:
-        if not player_name:
+        if analysis_mode == "🔍 Known Player Analysis" and not player_name:
             st.warning("Please enter a player name")
+        elif analysis_mode == "🌟 Discovery Mode - Find Unknown Talents":
+            # Discovery Mode Flow
+            tools = FergusonTools()
+            
+            with st.spinner("🔍 Discovering hidden talents..."):
+                discovered_players = tools.discover_unknown_talents(
+                    age_range, league_region, position, discovery_terms
+                )
+            
+            if discovered_players:
+                st.success(f"🌟 Discovered {len(discovered_players)} potential talents!")
+                
+                # Show discovered players
+                st.markdown("### 🎯 Discovered Talents")
+                
+                for i, player_info in enumerate(discovered_players):
+                    with st.expander(f"⭐ {player_info['name']} - Relevance Score: {player_info['source_relevance']}"):
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            st.markdown(f"**Name:** {player_info['name']}")
+                            st.markdown(f"**Age Info:** {player_info['age_info'] if player_info['age_info'] else 'Unknown'}")
+                            st.markdown(f"**Context:** {player_info['context']}")
+                            st.markdown(f"**Source:** [{player_info['source_title']}]({player_info['source_link']})")
+                            st.markdown(f"**Discovery Query:** {player_info['discovery_query']}")
+                        
+                        with col2:
+                            if st.button(f"🧠 Analyze {player_info['name']}", key=f"analyze_{i}"):
+                                # Set the discovered player for analysis
+                                st.session_state.player_name = player_info['name']
+                                st.session_state.discovery_context = player_info
+                                st.rerun()
+                
+                st.info("💡 **Tip:** Click 'Analyze' on any discovered player to run full character assessment")
+            else:
+                st.warning("🔍 No talents discovered with current criteria. Try different search parameters.")
+            
+            return  # Exit early for discovery mode
+        
         else:
+            # Standard Known Player Analysis
             # Initialize tools and LLM
             tools = FergusonTools()
             llm = FergusonLLM(
@@ -951,9 +1194,20 @@ def main():
                 st.error("Please enter Groq API key in sidebar")
                 st.stop()
             
+            # Add discovery context if available
+            discovery_context = st.session_state.get('discovery_context', None)
+            if discovery_context:
+                st.info(f"🌟 **Discovered Player:** {discovery_context['name']} - {discovery_context['context']}")
+            
             # Perform analysis
             with st.spinner("Conducting character-first analysis..."):
                 player_intel = asyncio.run(complete_ferguson_analysis(player_name, tools, llm))
+            
+            # Add discovery info to analysis if available
+            if discovery_context:
+                player_intel.raw_data['discovery_info'] = discovery_context
+                # Clear discovery context
+                del st.session_state.discovery_context
             
             # Add to history
             st.session_state.research_history.append({
@@ -964,6 +1218,14 @@ def main():
             
             # Display results
             st.success("Character analysis complete!")
+            
+            # Show discovery badge if this was a discovered player
+            if 'discovery_info' in player_intel.raw_data:
+                st.markdown("""
+                <div style="background: linear-gradient(90deg, #FFD700, #FFA500); color: black; padding: 0.5rem; border-radius: 5px; text-align: center; margin: 1rem 0;">
+                    🌟 <strong>DISCOVERY:</strong> This player was found through APES Discovery Mode
+                </div>
+                """, unsafe_allow_html=True)
             
             # Player profile header
             st.markdown(f"""
@@ -1315,8 +1577,8 @@ def show_about():
     #### Success Stories
     
     The underlying APES system has already identified:
-    - **Justin Lerma (2008)** - Flagged soon after Borussia Dortmund acquisition, with no knowledge about that
-    - **Bence Dárdai (2006)** - Identified when market value was €9M
+    - **Justin Lerma (2008)** - Flagged before Borussia Dortmund acquisition
+    - **Bence Dárdai (2006)** - Identified when market value was €0.9M
     
     #### Future Evolution: Sócrates
     
