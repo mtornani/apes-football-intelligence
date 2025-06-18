@@ -1,8 +1,7 @@
-# apes_cognitive_scouting.py
+# apes_cognitive_scouting_enhanced.py
 """
-APES Cognitive Scouting Intelligence
-Character-First Player Analysis Platform
-Zero Cost, Maximum Impact
+APES Cognitive Scouting Intelligence - Enhanced with Google CSE
+Character-First Player Analysis Platform with Better Search
 """
 
 import asyncio
@@ -18,12 +17,17 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import pandas as pd
-
-# Free alternatives
-from duckduckgo_search import DDGS
-import feedparser
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import quote_plus, urljoin, urlparse
+
+# Free alternatives - manteniamo DuckDuckGo come fallback
+try:
+    from duckduckgo_search import DDGS
+except ImportError:
+    DDGS = None
+
+import feedparser
 import wikipedia
 from pytrends.request import TrendReq
 
@@ -106,6 +110,8 @@ if "llm_provider" not in st.session_state:
     st.session_state.llm_provider = "groq"
 if "groq_api_key" not in st.session_state:
     st.session_state.groq_api_key = ""
+if "google_cse_api_key" not in st.session_state:
+    st.session_state.google_cse_api_key = st.secrets.get("GOOGLE_CSE_API_KEY", "")
 if "research_history" not in st.session_state:
     st.session_state.research_history = []
 
@@ -124,18 +130,216 @@ class PlayerIntelligence:
     narrative: str
     raw_data: Dict
 
-class FergusonTools:
-    """Advanced tools for human-centric football intelligence"""
+class EnhancedSearchEngine:
+    """Enhanced search engine integrating Google CSE from app.py"""
     
     def __init__(self):
-        self.ddgs = DDGS()
+        # Google CSE configuration
+        self.google_api_key = st.session_state.get("google_cse_api_key", "")
+        self.cse_id = "c12f53951c8884cfd"  # Same as app.py
+        
+        # Session for requests
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        # Initialize DuckDuckGo as fallback
+        self.ddgs = DDGS() if DDGS else None
+        
+        # Try pytrends
         try:
             self.pytrends = TrendReq(hl='en-US', tz=360)
         except:
             self.pytrends = None
+    
+    def search(self, query: str, max_results: int = 10) -> List[Dict]:
+        """Primary search method - tries Google CSE first, falls back to DuckDuckGo"""
         
+        # Try Google CSE first if API key available
+        if self.google_api_key:
+            results = self._google_cse_search(query, max_results)
+            if results:
+                return results
+        
+        # Fallback to DuckDuckGo
+        if self.ddgs:
+            try:
+                results = list(self.ddgs.text(query, max_results=max_results))
+                return [self._format_ddg_result(r) for r in results]
+            except:
+                pass
+        
+        return []
+    
+    def _google_cse_search(self, query: str, max_results: int) -> List[Dict]:
+        """Google Custom Search Engine search (from app.py)"""
+        
+        if not self.google_api_key:
+            return []
+        
+        try:
+            url = "https://www.googleapis.com/customsearch/v1"
+            
+            params = {
+                'key': self.google_api_key,
+                'cx': self.cse_id,
+                'q': query,
+                'num': min(max_results, 10),
+                'fields': 'items(title,snippet,link,pagemap)'
+            }
+            
+            response = self.session.get(url, params=params, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return self._parse_google_results(data)
+            elif response.status_code == 429:
+                st.warning("⚠️ Google search quota exceeded. Switching to DuckDuckGo...")
+                return []
+            else:
+                return []
+                
+        except Exception as e:
+            return []
+    
+    def _parse_google_results(self, data: dict) -> List[Dict]:
+        """Parse Google CSE response"""
+        
+        if 'items' not in data:
+            return []
+        
+        results = []
+        
+        for item in data['items']:
+            result = {
+                'title': item.get('title', ''),
+                'link': item.get('link', ''),
+                'snippet': item.get('snippet', ''),
+                'body': item.get('snippet', ''),  # For compatibility
+                'source': self._get_source_name(item.get('link', ''))
+            }
+            results.append(result)
+        
+        return results
+    
+    def _format_ddg_result(self, result: dict) -> dict:
+        """Format DuckDuckGo result to match our structure"""
+        return {
+            'title': result.get('title', ''),
+            'link': result.get('link', ''),
+            'snippet': result.get('body', ''),
+            'body': result.get('body', ''),
+            'source': self._get_source_name(result.get('link', ''))
+        }
+    
+    def _get_source_name(self, url: str) -> str:
+        """Get readable source name from URL"""
+        
+        if not url:
+            return 'Unknown'
+            
+        domain_map = {
+            'transfermarkt': 'Transfermarkt',
+            'whoscored': 'WhoScored',
+            'espn': 'ESPN',
+            'goal.com': 'Goal.com',
+            'tuttomercatoweb': 'TuttoMercatoWeb',
+            'calciomercato': 'Calciomercato',
+            'fbref': 'FBref',
+            'sofascore': 'SofaScore'
+        }
+        
+        url_lower = url.lower()
+        for key, name in domain_map.items():
+            if key in url_lower:
+                return name
+        
+        try:
+            domain = urlparse(url).netloc
+            return domain.replace('www.', '').split('.')[0].title()
+        except:
+            return 'Web Source'
+    
+    def scrape_page_content(self, url: str) -> Dict:
+        """Enhanced scraping with patterns from app.py"""
+        
+        try:
+            response = self.session.get(url, timeout=10)
+            if response.status_code != 200:
+                return {}
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract text
+            page_text = soup.get_text()
+            
+            # Extract structured data using patterns from app.py
+            extracted_data = self._extract_player_data(page_text)
+            
+            return {
+                'scraped_data': extracted_data,
+                'scraping_success': True,
+                'page_text': page_text[:1000]  # First 1000 chars
+            }
+            
+        except Exception as e:
+            return {
+                'scraping_success': False,
+                'scraping_error': str(e)
+            }
+    
+    def _extract_player_data(self, text: str) -> Dict:
+        """Extract player data using patterns from app.py"""
+        
+        data = {}
+        
+        # Age patterns
+        age_patterns = [
+            r'Age:\s*(\d{1,2})', 
+            r'(\d{1,2})\s*years old', 
+            r'Born:.*\((\d{1,2})\)',
+            r'(\d{1,2})\s*(?:years old|age|anni)'
+        ]
+        
+        for pattern in age_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data['age'] = int(match.group(1))
+                break
+        
+        # Position patterns
+        position_patterns = [
+            r'Position:\s*([^,\n]+)', 
+            r'Main position:\s*([^,\n]+)',
+            r'Plays as:\s*([^,\n]+)'
+        ]
+        
+        for pattern in position_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data['position'] = match.group(1).strip()
+                break
+        
+        # Goals and assists
+        goals_match = re.search(r'Goals:\s*(\d+)|(\d+)\s*goals?', text, re.IGNORECASE)
+        if goals_match:
+            data['goals'] = int(goals_match.group(1) or goals_match.group(2))
+        
+        assists_match = re.search(r'Assists:\s*(\d+)|(\d+)\s*assists?', text, re.IGNORECASE)
+        if assists_match:
+            data['assists'] = int(assists_match.group(1) or assists_match.group(2))
+        
+        return data
+
+class FergusonTools:
+    """Advanced tools for human-centric football intelligence with Google CSE"""
+    
+    def __init__(self):
+        self.search_engine = EnhancedSearchEngine()
+    
     def search_player_human_intel(self, player_name: str) -> Dict[str, List[Dict]]:
-        """Search for human intelligence about player with fallback strategies"""
+        """Search for human intelligence about player using enhanced search"""
         
         # Extract just first name and last name for broader searches
         name_parts = player_name.split()
@@ -192,20 +396,25 @@ class FergusonTools:
             # Try multiple query variations
             for query in query_list:
                 try:
-                    search_results = list(self.ddgs.text(query, max_results=3))
+                    search_results = self.search_engine.search(query, max_results=3)
+                    
                     for r in search_results:
                         if r not in category_results:  # Avoid duplicates
-                            category_results.append({
-                                'title': r.get('title', ''),
-                                'link': r.get('link', ''),
-                                'snippet': r.get('body', ''),
-                                'relevance': self._calculate_relevance(r.get('body', ''), player_name),
-                                'query_used': query
-                            })
+                            # Enhanced scraping for better data
+                            if self.search_engine.google_api_key and r.get('link'):
+                                scraped = self.search_engine.scrape_page_content(r['link'])
+                                if scraped.get('scraped_data'):
+                                    r['scraped_data'] = scraped['scraped_data']
+                            
+                            r['relevance'] = self._calculate_relevance(r.get('body', ''), player_name)
+                            r['query_used'] = query
+                            category_results.append(r)
                     
                     # If we got good results, don't need more queries for this category
                     if len(category_results) >= 3:
                         break
+                    
+                    time.sleep(0.3)  # Rate limiting
                         
                 except Exception as e:
                     continue
@@ -220,7 +429,7 @@ class FergusonTools:
         """Find similar player comparisons and success/failure patterns"""
         try:
             comparison_query = f'"{player_name}" similar player comparison style reminds'
-            similar_players = list(self.ddgs.text(comparison_query, max_results=8))
+            similar_players = self.search_engine.search(comparison_query, max_results=8)
             
             # Extract player names from comparisons
             mentioned_players = self._extract_player_names(similar_players)
@@ -236,6 +445,34 @@ class FergusonTools:
     
     def get_contextual_news(self, player_name: str) -> List[Dict]:
         """Get recent news with human context"""
+        # Use Google CSE for news searches if available
+        if self.search_engine.google_api_key:
+            news_queries = [
+                f"{player_name} transfer family news 2024",
+                f"{player_name} interview personality recent",
+                f"{player_name} coach opinion latest"
+            ]
+            
+            news = []
+            for query in news_queries:
+                try:
+                    results = self.search_engine.search(query, max_results=3)
+                    for result in results:
+                        news.append({
+                            'title': result.get('title', ''),
+                            'link': result.get('link', ''),
+                            'published': 'Recent',
+                            'summary': result.get('snippet', '')[:200],
+                            'human_relevance': self._assess_human_relevance(
+                                result.get('title', '') + ' ' + result.get('snippet', '')
+                            )
+                        })
+                except:
+                    continue
+            
+            return sorted(news, key=lambda x: x['human_relevance'], reverse=True)[:5]
+        
+        # Fallback to RSS feeds
         feeds = [
             f"https://news.google.com/rss/search?q={player_name}+transfer+family",
             f"https://news.google.com/rss/search?q={player_name}+interview+personality",
@@ -258,6 +495,88 @@ class FergusonTools:
                 continue
                 
         return sorted(news, key=lambda x: x['human_relevance'], reverse=True)
+
+def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
+        """Discover unknown talents using enhanced search"""
+        
+        # Build discovery search queries
+        age_queries = {
+            "15-17 (Academy)": ["wonderkid 2007 2008", "young talent 16 17", "academy prospect"],
+            "18-20 (Breakthrough)": ["breakthrough 2004 2005", "young player 18 19", "debut 2024"],
+            "21-23 (Emerging)": ["emerging talent 2001 2002", "rising star 21 22", "transfer 2024"],
+            "Any Age": ["wonderkid", "young talent", "breakthrough"]
+        }
+        
+        region_queries = {
+            "South America": ["Brazil wonderkid", "Argentina talent", "Colombian player"],
+            "Eastern Europe": ["Polish talent", "Czech player", "Serbian wonderkid"],
+            "Africa": ["Nigerian wonderkid", "Senegalese talent", "Ghanaian player"],
+            "Asia": ["Japanese talent", "Korean player", "Asian wonderkid"],
+            "Lower European Leagues": ["League Two talent", "lower division wonderkid"],
+            "Any Region": ["football wonderkid", "soccer talent", "young prospect"]
+        }
+        
+        position_queries = {
+            "Midfielder": ["midfielder wonderkid", "midfield talent"],
+            "Forward": ["striker wonderkid", "forward talent"],
+            "Defender": ["defender wonderkid", "centre back talent"],
+            "Goalkeeper": ["goalkeeper wonderkid", "keeper talent"],
+            "Any Position": ["football wonderkid", "soccer talent"]
+        }
+        
+        # Combine search terms
+        discovery_queries = []
+        
+        age_terms = age_queries.get(age_range, ["young talent"])
+        region_terms = region_queries.get(league_region, ["wonderkid"])
+        pos_terms = position_queries.get(position, ["prospect"])
+        
+        # Create focused queries
+        for age_term in age_terms:
+            for region_term in region_terms:
+                query = f"{age_term} {region_term}"
+                if additional_terms:
+                    query += f" {additional_terms}"
+                discovery_queries.append(query)
+        
+        # Execute discovery searches
+        discovered_players = []
+        
+        for query in discovery_queries[:8]:  # Limit queries
+            try:
+                search_results = self.search_engine.search(query, max_results=6)
+                
+                for result in search_results:
+                    # Enhanced scraping if using Google CSE
+                    if self.search_engine.google_api_key and result.get('link'):
+                        scraped = self.search_engine.scrape_page_content(result['link'])
+                        if scraped.get('scraped_data'):
+                            result['scraped_data'] = scraped['scraped_data']
+                    
+                    # Extract potential player names
+                    potential_players = self._extract_player_names_from_discovery(result)
+                    for player_info in potential_players:
+                        if player_info and isinstance(player_info, dict) and player_info.get('name'):
+                            existing_names = [p.get('name', '') for p in discovered_players]
+                            if player_info['name'] not in existing_names:
+                                relevance = self._calculate_discovery_relevance(result, age_range, position)
+                                
+                                if relevance > 0.5:
+                                    player_entry = {
+                                        **player_info,
+                                        'discovery_query': query,
+                                        'source_relevance': relevance
+                                    }
+                                    discovered_players.append(player_entry)
+                
+                time.sleep(0.3)  # Rate limiting
+                    
+            except Exception as e:
+                continue
+        
+        # Sort by relevance
+        discovered_players.sort(key=lambda x: x.get('source_relevance', 0), reverse=True)
+        return discovered_players[:10]
     
     def _calculate_relevance(self, text: str, player_name: str) -> float:
         """Calculate how relevant the text is for human intelligence"""
@@ -273,7 +592,6 @@ class FergusonTools:
     
     def _extract_player_names(self, articles: List[Dict]) -> List[str]:
         """Extract mentioned player names from articles"""
-        # Simple extraction - could be enhanced with NER
         common_patterns = [r'like (\w+ \w+)', r'reminds of (\w+ \w+)', r'similar to (\w+ \w+)']
         players = set()
         
@@ -319,176 +637,20 @@ class FergusonTools:
         
         return list(set(found_warnings))
     
-    def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
-        """Discover unknown talents based on search criteria"""
-        
-        # Build discovery search queries - simplified and more effective
-        age_queries = {
-            "15-17 (Academy)": ["wonderkid 2007 2008", "young talent 16 17", "academy prospect"],
-            "18-20 (Breakthrough)": ["breakthrough 2004 2005", "young player 18 19", "debut 2024"],
-            "21-23 (Emerging)": ["emerging talent 2001 2002", "rising star 21 22", "transfer 2024"],
-            "Any Age": ["wonderkid", "young talent", "breakthrough"]
-        }
-        
-        region_queries = {
-            "South America": ["Brazil wonderkid", "Argentina talent", "Colombian player", "Ecuadorian"],
-            "Eastern Europe": ["Polish talent", "Czech player", "Serbian wonderkid", "Croatian"],
-            "Africa": ["Nigerian wonderkid", "Senegalese talent", "Ghanaian player", "African"],
-            "Asia": ["Japanese talent", "Korean player", "Asian wonderkid"],
-            "Lower European Leagues": ["League Two talent", "lower division wonderkid", "non-league"],
-            "Any Region": ["football wonderkid", "soccer talent", "young prospect"]
-        }
-        
-        position_queries = {
-            "Midfielder": ["midfielder wonderkid", "midfield talent", "central midfielder"],
-            "Forward": ["striker wonderkid", "forward talent", "goalscorer"],
-            "Defender": ["defender wonderkid", "centre back talent", "defensive"],
-            "Goalkeeper": ["goalkeeper wonderkid", "keeper talent", "young goalkeeper"],
-            "Any Position": ["football wonderkid", "soccer talent", "young player"]
-        }
-        
-        # Combine search terms - simpler combinations
-        discovery_queries = []
-        
-        age_terms = age_queries.get(age_range, ["young talent"])
-        region_terms = region_queries.get(league_region, ["wonderkid"])
-        pos_terms = position_queries.get(position, ["prospect"])
-        
-        # Create focused queries
-        for age_term in age_terms:
-            for region_term in region_terms:
-                # Simple two-term combinations
-                query = f"{age_term} {region_term}"
-                if additional_terms:
-                    query += f" {additional_terms}"
-                discovery_queries.append(query)
-        
-        # Add position-specific queries
-        for pos_term in pos_terms:
-            for region_term in region_terms:
-                query = f"{pos_term} {region_term}"
-                if additional_terms:
-                    query += f" {additional_terms}"
-                discovery_queries.append(query)
-        
-        # Add some generic effective queries
-        discovery_queries.extend([
-            "wonderkid 2024 transfer",
-            "young talent breakthrough 2024",
-            "academy graduate 2024",
-            f"{league_region} wonderkid 2024" if league_region != "Any Region" else "wonderkid 2024"
-        ])
-        
-        # Execute discovery searches with better error handling and variety
-        discovered_players = []
-        successful_queries = []
-        
-        for query in discovery_queries[:8]:  # Try up to 8 queries
-            try:
-                search_results = list(self.ddgs.text(query, max_results=6))
-                
-                if not search_results:
-                    continue
-                
-                query_found_players = False
-                for result in search_results:
-                    # Extract potential player names from results
-                    potential_players = self._extract_player_names_from_discovery(result)
-                    for player_info in potential_players:
-                        if player_info and isinstance(player_info, dict) and player_info.get('name'):
-                            # Check for duplicates by name
-                            existing_names = [p.get('name', '') for p in discovered_players if isinstance(p, dict)]
-                            if player_info['name'] not in existing_names:
-                                relevance = self._calculate_discovery_relevance(result, age_range, position)
-                                
-                                # Only add if relevance is meaningful
-                                if relevance > 0.5:
-                                    player_entry = {
-                                        **player_info,
-                                        'discovery_query': query,
-                                        'source_relevance': relevance
-                                    }
-                                    discovered_players.append(player_entry)
-                                    query_found_players = True
-                
-                if query_found_players:
-                    successful_queries.append(query)
-                    
-            except Exception as e:
-                # Continue with next query if this one fails
-                continue
-        
-        # Filter out invalid entries and sort by relevance
-        valid_players = []
-        for p in discovered_players:
-            if (isinstance(p, dict) and 
-                p.get('name') and 
-                isinstance(p.get('source_relevance'), (int, float)) and 
-                p.get('source_relevance', 0) > 0):
-                valid_players.append(p)
-        
-        # Add fallback discovery if no results - but with better scoring
-        if not valid_players and len(discovery_queries) > 0:
-            # Try some very generic searches as fallback
-            fallback_queries = [
-                "football wonderkid 2024 breakthrough",
-                "young footballer talent scout",
-                "academy graduate 2024 debut",
-                "rising star football player 2024",
-                "teenage footballer prospect",
-                "youth football talent emerging"
-            ]
-            
-            for query in fallback_queries:
-                try:
-                    search_results = list(self.ddgs.text(query, max_results=12))
-                    for result in search_results:
-                        potential_players = self._extract_player_names_from_discovery(result)
-                        for player_info in potential_players:
-                            if player_info and isinstance(player_info, dict) and player_info.get('name'):
-                                existing_names = [p.get('name', '') for p in valid_players if isinstance(p, dict)]
-                                if player_info['name'] not in existing_names:
-                                    # Calculate proper relevance score even for fallback
-                                    relevance = self._calculate_discovery_relevance(result, age_range, position)
-                                    
-                                    player_entry = {
-                                        **player_info,
-                                        'discovery_query': f"Enhanced: {query}",
-                                        'source_relevance': max(relevance, 0.5)  # Minimum 0.5 instead of 1.0
-                                    }
-                                    valid_players.append(player_entry)
-                                    if len(valid_players) >= 8:  # Get more results
-                                        break
-                        if len(valid_players) >= 8:
-                            break
-                    if len(valid_players) >= 8:
-                        break
-                except:
-                    continue
-        # Sort by relevance
-        valid_players.sort(key=lambda x: x['source_relevance'], reverse=True)
-        return valid_players[:10]  # Top 10 discoveries
-    
-    def _extract_players_from_targeted_sources(self, article: Dict) -> List[Dict]:
-        """Extract player names from targeted scouting sources with better patterns"""
+    def _extract_player_names_from_discovery(self, article: Dict) -> List[Dict]:
+        """Extract player names from discovery search results"""
         if not article or not isinstance(article, dict):
             return []
             
         text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
         
-        # More specific patterns for scouting content
+        # Enhanced patterns for player extraction
         patterns = [
-            # Transfermarkt/UEFA style
             r'(\w+ \w+)\s*\((\d{1,2})\)[^.]*(?:€[\d.]+[MK]|market value|valuation)',
-            # Award/list style  
             r'(\d+)\.\s+(\w+ \w+)[^.]*(?:years old|age \d+|\(\d{4}\))',
-            # Scouting report style
             r'(\w+ \w+)[^.]*(?:rated|prospect|potential|breakthrough|debut)',
-            # News style with age
             r'(\w+ \w+),?\s*(?:aged?\s*)?(\d{1,2})[^.]*(?:signed|transfer|move)',
-            # Player profile style
             r'Profile:\s*(\w+ \w+)',
-            # List/ranking style
             r'(\w+ \w+)\s*-\s*(?:midfielder|forward|striker|defender|goalkeeper)',
         ]
         
@@ -504,19 +666,24 @@ class FergusonTools:
                         name = str(match)
                         age_info = ""
                     
-                    # Enhanced filtering for quality
+                    # Quality filtering
                     if (len(name.split()) == 2 and 
-                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but', 'with', 'from', 'new', 'old', 'first', 'last', 'this', 'that', 'their', 'more', 'most', 'best']) and
+                        not any(skip in name.lower() for skip in ['the', 'and', 'or', 'but']) and
                         len(name) > 4 and
-                        name[0].isupper() and
-                        not name.lower() in ['uefa com', 'fifa com', 'premier league', 'la liga']):
+                        name[0].isupper()):
+                        
+                        # Check if scraped data has additional info
+                        scraped_data = article.get('scraped_data', {})
                         
                         player_info = {
                             'name': name.title(),
-                            'age_info': age_info,
+                            'age_info': age_info or scraped_data.get('age', ''),
                             'source_title': str(article.get('title', '')),
                             'source_link': str(article.get('link', '')),
-                            'context': self._extract_context(text, name)
+                            'context': self._extract_context(text, name),
+                            'position': scraped_data.get('position', ''),
+                            'goals': scraped_data.get('goals', ''),
+                            'assists': scraped_data.get('assists', '')
                         }
                         
                         if player_info['name'] not in [p['name'] for p in found_players]:
@@ -524,61 +691,17 @@ class FergusonTools:
         except Exception:
             return []
         
-        return found_players[:5]  # Top 5 from each source
-    
-    def _calculate_targeted_relevance(self, article: Dict, query: str, age_range: str, position: str) -> float:
-        """Calculate relevance for targeted source-based discovery"""
-        try:
-            if not article or not isinstance(article, dict):
-                return 0.0
-                
-            text = str(article.get('body', '')) + ' ' + str(article.get('title', ''))
-            text = text.lower()
-            
-            score = 0.0
-            
-            # High value for quality sources
-            quality_sources = ['transfermarkt', 'uefa', 'fifa', 'espn', 'goal', 'sky sports', 'bbc sport']
-            if any(source in text for source in quality_sources):
-                score += 8.0
-            
-            # High value for structured content (lists, rankings, awards)
-            if any(indicator in text for indicator in ['top 10', 'ranking', 'list', 'award', 'nominee', 'winner']):
-                score += 6.0
-            
-            # Scouting-specific content
-            scouting_terms = ['scouting report', 'player profile', 'market value', 'breakthrough', 'prospect']
-            score += sum(4.0 for term in scouting_terms if term in text)
-            
-            # Age relevance
-            if '16' in text or '17' in text or '18' in text or '19' in text or '20' in text:
-                score += 3.0
-            
-            # Position relevance
-            if position != "Any Position":
-                position_terms = position.lower().split()
-                score += sum(3.0 for term in position_terms if term in text)
-            
-            # Transfer/market context
-            market_terms = ['transfer', 'signing', 'market value', 'fee', 'contract']
-            score += sum(2.0 for term in market_terms if term in text)
-            
-            return float(score)
-            
-        except Exception:
-            return 0.0
+        return found_players[:5]
     
     def _extract_context(self, text: str, player_name: str) -> str:
         """Extract relevant context around player name"""
         try:
-            # Convert inputs to strings and handle None values
             text = str(text) if text is not None else ""
             player_name = str(player_name) if player_name is not None else ""
             
             if not text or not player_name:
                 return ""
             
-            # Find sentences containing the player name
             sentences = re.split(r'[.!?]', text)
             relevant_sentences = [s.strip() for s in sentences if player_name.lower() in s.lower()]
             
@@ -589,8 +712,8 @@ class FergusonTools:
             return ""
     
     def _calculate_discovery_relevance(self, article: Dict, age_range: str, position: str) -> float:
-        """Calculate how relevant an article is for talent discovery"""
-        text = (article.get('body', '') + ' ' + article.get('title', '')).lower()
+        """Calculate relevance for talent discovery"""
+        text = (article.get('body', '') + ' ' + article.get('text = (article.get('body', '') + ' ' + article.get('title', '')).lower()
         
         relevance_keywords = [
             'academy', 'youth', 'prospect', 'talent', 'wonderkid', 'breakthrough', 
@@ -605,6 +728,12 @@ class FergusonTools:
         score += sum(1 for keyword in age_keywords if keyword in text)
         score += sum(3 for keyword in position_keywords if keyword in text)
         
+        # Bonus for scraped data
+        if article.get('scraped_data'):
+            score += 5
+        
+        return score
+    
     def _assess_human_relevance(self, text: str) -> float:
         """Assess how relevant news is for human intelligence"""
         human_keywords = ['interview', 'personality', 'family', 'character', 'mental', 
@@ -773,8 +902,8 @@ class FergusonLLM:
             narrative=clean_narrative,
             raw_data=data
         )
-    
-    def _clean_narrative(self, text: str) -> str:
+
+        def _clean_narrative(self, text: str) -> str:
         """Clean narrative text from JSON artifacts and formatting issues"""
         
         # Remove JSON structure artifacts
@@ -912,6 +1041,9 @@ Further direct scouting recommended to complete the character assessment.
         high_relevance_items = sum(1 for results in human_intel.values() 
                                  for item in results if item.get('relevance', 0) > 3)
         
+        # Check if we used Google CSE (better data quality)
+        used_google_cse = any(item.get('source') != 'DuckDuckGo' for results in human_intel.values() for item in results)
+        
         # Conservative scoring based on data availability
         if total_intel_items > 10 and high_relevance_items > 3:
             base_score = 7  # Reasonable baseline when we have good data
@@ -919,6 +1051,10 @@ Further direct scouting recommended to complete the character assessment.
             base_score = 6  # Lower when limited data
         else:
             base_score = 5  # Very conservative when minimal data
+        
+        # Bonus for Google CSE data
+        if used_google_cse and total_intel_items > 5:
+            base_score = min(base_score + 1, 8)
         
         # Extract REAL flags from actual data
         red_flags = []
@@ -942,6 +1078,9 @@ Further direct scouting recommended to complete the character assessment.
         if any('academy' in str(results).lower() for results in human_intel.values()):
             green_lights.append("Youth development background identified")
         
+        if used_google_cse:
+            green_lights.append("Enhanced data quality from verified sources")
+        
         # Default to honest assessment if no data
         if not red_flags:
             red_flags = ["Limited data available for comprehensive assessment"]
@@ -950,6 +1089,8 @@ Further direct scouting recommended to complete the character assessment.
             green_lights = ["Requires direct scouting for proper evaluation"]
         
         # Honest narrative about data limitations
+        data_source = "Google CSE + Web Intelligence" if used_google_cse else "Web Intelligence"
+        
         narrative = f"""
 FERGUSON ASSESSMENT: {player_name}
 
@@ -958,7 +1099,8 @@ ASSESSMENT STATUS: {reason}
 DATA QUALITY REPORT:
 - Intelligence items gathered: {total_intel_items}
 - High-relevance sources: {high_relevance_items}
-- Data coverage: {'Partial' if total_intel_items > 5 else 'Limited'}
+- Data source: {data_source}
+- Data coverage: {'Good' if total_intel_items > 10 else 'Partial' if total_intel_items > 5 else 'Limited'}
 
 PRELIMINARY ASSESSMENT:
 Based on available public information, this represents a {self._get_honest_assessment_level(total_intel_items)} assessment.
@@ -1147,7 +1289,13 @@ def main(tab_context="main"):
     st.markdown('<h1 class="main-header">🧠 APES Cognitive Scouting</h1>', unsafe_allow_html=True)
     st.markdown("*Advanced Pattern Extraction System - Character-First Intelligence*")
     
-    # Ferguson quote (manteniamo la filosofia ma rendiamo neutrale)
+    # Check if Google CSE is configured
+    if st.session_state.google_cse_api_key:
+        st.success("✅ Google CSE API Configured - Enhanced search enabled")
+    else:
+        st.info("💡 Using DuckDuckGo search. Add Google CSE API key for better results.")
+    
+    # Ferguson quote
     st.markdown("""
     <div class="ferguson-quote">
     "The best scouts don't just analyze stats. They understand the person behind the player - 
@@ -1159,6 +1307,22 @@ def main(tab_context="main"):
     # Sidebar configuration
     with st.sidebar:
         st.title("⚙️ Cognitive Intelligence Config")
+        
+        # Search Engine Config
+        st.markdown("### 🔍 Search Engine")
+        if st.session_state.google_cse_api_key:
+            st.success("Google CSE Active")
+        else:
+            google_key = st.text_input(
+                "Google CSE API Key (Optional)",
+                type="password",
+                help="Get free API key at https://developers.google.com/custom-search"
+            )
+            if google_key:
+                st.session_state.google_cse_api_key = google_key
+                st.rerun()
+        
+        st.divider()
         
         # LLM Provider selection
         llm_provider = st.selectbox(
@@ -1219,7 +1383,7 @@ def main(tab_context="main"):
                     'terms': ''
                 }
         
-        st.divider()
+        st.divider=st.divider()
         
         # Research history
         if st.session_state.research_history:
@@ -1339,6 +1503,14 @@ def main(tab_context="main"):
                             st.markdown(f"**Source:** [{player_info['source_title']}]({player_info['source_link']})")
                             st.markdown(f"**Discovery Query:** {player_info['discovery_query']}")
                             
+                            # Show additional scraped data if available
+                            if player_info.get('position'):
+                                st.markdown(f"**Position:** {player_info['position']}")
+                            if player_info.get('goals'):
+                                st.markdown(f"**Goals:** {player_info['goals']}")
+                            if player_info.get('assists'):
+                                st.markdown(f"**Assists:** {player_info['assists']}")
+                            
                             # Show relevance breakdown for high scores
                             if player_info['source_relevance'] >= 5:
                                 st.markdown("**🎯 High Relevance Match!**")
@@ -1399,8 +1571,8 @@ def main(tab_context="main"):
             
             # Display results
             st.success("Character analysis complete!")
-            
-            # Show discovery badge if this was a discovered player
+
+# Show discovery badge if this was a discovered player
             if 'discovery_info' in player_intel.raw_data:
                 st.markdown("""
                 <div style="background: linear-gradient(90deg, #FFD700, #FFA500); color: black; padding: 0.5rem; border-radius: 5px; text-align: center; margin: 1rem 0;">
@@ -1521,6 +1693,11 @@ def main(tab_context="main"):
                 high_rel = sum(1 for results in player_intel.raw_data.get('human_intel', {}).values() 
                              for item in results if item.get('relevance', 0) > 3)
                 
+                # Check if Google CSE was used
+                used_google = any(item.get('source') != 'DuckDuckGo' 
+                                for results in player_intel.raw_data.get('human_intel', {}).values() 
+                                for item in results)
+                
                 # Data quality badge
                 if total_intel >= 10 and high_rel >= 3:
                     quality_badge = "🟢 Good Data Coverage"
@@ -1534,6 +1711,8 @@ def main(tab_context="main"):
                 
                 st.markdown(f"**Data Quality:** <span class='{quality_color}'>{quality_badge}</span>", unsafe_allow_html=True)
                 st.markdown(f"*Total intelligence items: {total_intel} | High relevance: {high_rel}*")
+                if used_google:
+                    st.markdown("*Using Google CSE for enhanced results*")
                 st.divider()
                 
                 # Human Intelligence
@@ -1545,12 +1724,22 @@ def main(tab_context="main"):
                                 for i, result in enumerate(results[:3]):
                                     st.markdown(f"**{i+1}. [{result['title']}]({result['link']})**")
                                     st.markdown(f"*Relevance: {result['relevance']:.1f}% | Query: {result.get('query_used', 'N/A')}*")
+                                    st.markdown(f"*Source: {result.get('source', 'Unknown')}*")
                                     st.markdown(result['snippet'][:200] + "...")
+                                    
+                                    # Show scraped data if available
+                                    if result.get('scraped_data'):
+                                        scraped = result['scraped_data']
+                                        if scraped.get('age'):
+                                            st.markdown(f"*Extracted Age: {scraped['age']}*")
+                                        if scraped.get('position'):
+                                            st.markdown(f"*Extracted Position: {scraped['position']}*")
+                                    
                                     st.divider()
                         else:
                             st.markdown(f"**{category.replace('_', ' ').title()}:** No relevant data found")
-                
-                # Comparative Analysis
+
+# Comparative Analysis
                 if player_intel.raw_data.get('comparative'):
                     st.markdown("#### Comparative Analysis")
                     comp_data = player_intel.raw_data['comparative']
@@ -1750,10 +1939,19 @@ def show_about():
     
     #### Technology Stack
     
-    - **Intelligence Gathering:** DuckDuckGo search, RSS feeds, Wikipedia
+    - **Intelligence Gathering:** Google CSE + DuckDuckGo fallback
+    - **Enhanced Scraping:** BeautifulSoup with pattern extraction
     - **Analysis Engine:** Groq/Ollama LLM with character-focused prompting
     - **Visualization:** Plotly for interactive charts and dashboards
-    - **Zero Cost:** No expensive APIs required
+    - **Zero Cost Options:** Works with free APIs and local models
+    
+    #### Enhanced with Google CSE
+    
+    This version integrates Google Custom Search Engine for:
+    - Better search quality and relevance
+    - Structured data extraction
+    - Enhanced scraping capabilities
+    - Fallback to DuckDuckGo when quota exceeded
     
     #### Success Stories
     
@@ -1770,7 +1968,7 @@ def show_about():
     ---
     
     **Built by:** APES Development Team  
-    **Version:** Cognitive 1.0  
+    **Version:** Cognitive 2.0 - Enhanced with Google CSE  
     **License:** Zero Cost, Maximum Impact  
     """)
 
