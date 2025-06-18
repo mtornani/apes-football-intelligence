@@ -903,7 +903,7 @@ class FergusonLLM:
             raw_data=data
         )
 
-        def _clean_narrative(self, text: str) -> str:
+def _clean_narrative(self, text: str) -> str:
         """Clean narrative text from JSON artifacts and formatting issues"""
         
         # Remove JSON structure artifacts
