@@ -495,8 +495,8 @@ class FergusonTools:
                 continue
                 
         return sorted(news, key=lambda x: x['human_relevance'], reverse=True)
-
-def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
+    
+    def discover_unknown_talents(self, age_range: str, league_region: str, position: str, additional_terms: str = "") -> List[Dict]:
         """Discover unknown talents using enhanced search"""
         
         # Build discovery search queries
@@ -713,7 +713,7 @@ def discover_unknown_talents(self, age_range: str, league_region: str, position:
     
     def _calculate_discovery_relevance(self, article: Dict, age_range: str, position: str) -> float:
         """Calculate relevance for talent discovery"""
-        text = (article.get('body', '') + ' ' + article.get('text = (article.get('body', '') + ' ' + article.get('title', '')).lower()
+        text = (article.get('body', '') + ' ' + article.get('title', '')).lower()
         
         relevance_keywords = [
             'academy', 'youth', 'prospect', 'talent', 'wonderkid', 'breakthrough', 
